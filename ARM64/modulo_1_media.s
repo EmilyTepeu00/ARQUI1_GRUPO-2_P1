@@ -1,332 +1,399 @@
 // ============================================================
-// modulo_1_media.s - Media Aritmética Ponderada
+// modulo_1_media.s - Media Aritmetica Ponderada
 // Proyecto: Invernadero Inteligente IoT
 // Integrante 1
 // ============================================================
-// Calcula la media ponderada de 30 datos de temperatura
-// usando pesos crecientes del 1 al 30.
+// Calcula la media ponderada de 30 datos usando pesos 1..30
+// Formula: MEDIA_PONDERADA = S(X_i * W_i) / SW_i
 //
-// Fórmula: MEDIA_PONDERADA = Σ(X_i * W_i) / ΣW_i
-//   Donde W_i = peso de cada lectura (1, 2, 3, ... 30)
-//
-// Entrada:  lecturas.csv  (columna TEMP = columna 1)
+// Entrada:  lecturas.csv  columna 1 = TEMP
 // Salida:   resultado_media.txt
 // ============================================================
 
+.equ SYS_OPENAT,  56
+.equ SYS_CLOSE,   57
+.equ SYS_WRITE,   64
+.equ SYS_EXIT,    93
+.equ AT_FDCWD,   -100
+.equ O_WRONLY,    1
+.equ O_CREAT,     64
+.equ O_TRUNC,     512
+.equ PERM_644,    0644
+
+// ============================================================
 .section .data
 
-// Nombre del archivo de salida
 nombre_salida:
     .asciz "resultado_media.txt"
 
-// Etiquetas para el archivo de salida (formato exacto del proyecto)
-lbl_module:
-    .asciz "MODULE=WEIGHTED_MEAN\n"
-lbl_module_len = . - lbl_module
+// Lineas del archivo de salida
+linea_module:
+    .ascii "MODULE=WEIGHTED_MEAN\n"
+    .equ linea_module_len, . - linea_module
 
-lbl_total:
-    .asciz "TOTAL_VALUES=30\n"
-lbl_total_len = . - lbl_total
+linea_total:
+    .ascii "TOTAL_VALUES=30\n"
+    .equ linea_total_len, . - linea_total
 
-lbl_sumx:
-    .asciz "SUM_X="
-lbl_sumx_len = . - lbl_sumx
+etiq_sumx:
+    .ascii "SUM_X="
+    .equ etiq_sumx_len, . - etiq_sumx
 
-lbl_wsum:
-    .asciz "WEIGHT_SUM="
-lbl_wsum_len = . - lbl_wsum
+etiq_wsum:
+    .ascii "WEIGHT_SUM="
+    .equ etiq_wsum_len, . - etiq_wsum
 
-lbl_mean:
-    .asciz "WEIGHTED_MEAN="
-lbl_mean_len = . - lbl_mean
+etiq_mean:
+    .ascii "WEIGHTED_MEAN="
+    .equ etiq_mean_len, . - etiq_mean
 
 newline:
-    .asciz "\n"
-newline_len = . - newline
+    .ascii "\n"
 
-// Buffer para construir el archivo de salida
-.comm resultado_buf, 512, 8
+// ============================================================
+.section .bss
 
-// Buffer para números en texto
-.comm num_buf, 32, 8
-
-// Variables para los cálculos
-.comm suma_x,         8, 8    // Σ X_i (suma simple de datos)
-.comm suma_ponderada, 8, 8    // Σ(X_i * W_i)
-.comm suma_pesos,     8, 8    // Σ W_i
-.comm media_pond,     8, 8    // resultado final
+suma_x:         .skip 8     // suma simple de datos
+suma_pond:      .skip 8     // suma ponderada S(Xi*Wi)
+suma_pesos:     .skip 8     // suma de pesos S(Wi)
+media_pond:     .skip 8     // resultado final
+buf_num:        .skip 32    // buffer para numero en texto
+fd_out:         .skip 8     // descriptor archivo salida
 
 // ============================================================
 .section .text
+
 .global _start
 
-// Importar funciones de utils.s
+// Importar de utils.s
 .extern leer_datos
 .extern int_a_ascii
-.extern ascii_a_int
-.extern escribir_archivo
+.extern datos
 
 // ============================================================
-// PUNTO DE ENTRADA PRINCIPAL
+// PUNTO DE ENTRADA
 // ============================================================
 _start:
 
-    // --------------------------------------------------------
-    // PASO 1: Leer columna de temperatura (columna 1 = TEMP)
-    // --------------------------------------------------------
-    mov x0, #1              // columna 1 = TEMP en el CSV
-    bl leer_datos           // los 30 datos quedan en 'datos'
-    // x0 ahora tiene cuántos datos se leyeron
+    // -------------------------------------------------------
+    // PASO 1: Leer columna TEMP (columna 1) del CSV
+    // -------------------------------------------------------
+    mov x0, #1
+    bl  leer_datos
+    // x0 = cantidad de datos leidos (esperamos 30)
 
-    // --------------------------------------------------------
-    // PASO 2: Calcular Σ X_i, Σ(X_i * W_i) y Σ W_i
-    // --------------------------------------------------------
-    // Inicializar acumuladores en cero
+    // -------------------------------------------------------
+    // PASO 2: Inicializar acumuladores en cero
+    // -------------------------------------------------------
     adr x1, suma_x
     str xzr, [x1]
-    adr x1, suma_ponderada
+    adr x1, suma_pond
     str xzr, [x1]
     adr x1, suma_pesos
     str xzr, [x1]
 
-    // Cargar dirección del arreglo de datos
-    adr x9, datos           // x9 = puntero al arreglo datos[]
-    mov x10, #0             // x10 = índice i (0 a 29)
-    mov x11, #1             // x11 = peso W_i (empieza en 1)
+    // -------------------------------------------------------
+    // PASO 3: Loop - calcular sumas
+    // x10 = indice i (0..29)
+    // x11 = peso Wi (1..30)
+    // x9  = puntero base a datos[]
+    // -------------------------------------------------------
+    adr x9,  datos
+    mov x10, #0
+    mov x11, #1
 
-.loop_calcular:
-    // ¿Ya procesamos 30 datos?
+loop_sumas:
     cmp x10, #30
-    bge .calculos_listos
+    bge sumas_listas
 
     // Cargar datos[i]
-    ldr x12, [x9, x10, lsl #3]   // x12 = X_i
+    ldr x12, [x9, x10, lsl #3]
 
-    // Acumular suma simple: suma_x += X_i
+    // suma_x += Xi
     adr x13, suma_x
     ldr x14, [x13]
     add x14, x14, x12
     str x14, [x13]
 
-    // Acumular suma ponderada: suma_ponderada += X_i * W_i
-    mul x15, x12, x11             // x15 = X_i * W_i
-    adr x13, suma_ponderada
+    // suma_pond += Xi * Wi
+    mul x15, x12, x11
+    adr x13, suma_pond
     ldr x14, [x13]
     add x14, x14, x15
     str x14, [x13]
 
-    // Acumular suma de pesos: suma_pesos += W_i
+    // suma_pesos += Wi
     adr x13, suma_pesos
     ldr x14, [x13]
     add x14, x14, x11
     str x14, [x13]
 
-    // Incrementar índice y peso
-    add x10, x10, #1        // i++
-    add x11, x11, #1        // W_i++ (pesos: 1, 2, 3, ..., 30)
+    add x10, x10, #1
+    add x11, x11, #1
+    b   loop_sumas
 
-    b .loop_calcular
+sumas_listas:
 
-.calculos_listos:
-
-    // --------------------------------------------------------
-    // PASO 3: Calcular media ponderada
-    // MEDIA_PONDERADA = suma_ponderada / suma_pesos
-    // --------------------------------------------------------
-    adr x0, suma_ponderada
-    ldr x0, [x0]            // x0 = Σ(X_i * W_i)
+    // -------------------------------------------------------
+    // PASO 4: Calcular media ponderada
+    // media = suma_pond / suma_pesos
+    // -------------------------------------------------------
+    adr x0, suma_pond
+    ldr x0, [x0]
     adr x1, suma_pesos
-    ldr x1, [x1]            // x1 = Σ W_i
+    ldr x1, [x1]
+    udiv x2, x0, x1
 
-    // División entera: media = suma_ponderada / suma_pesos
-    udiv x2, x0, x1         // x2 = media ponderada
-
-    // Guardar resultado
     adr x3, media_pond
     str x2, [x3]
 
-    // --------------------------------------------------------
-    // PASO 4: Construir el archivo de salida resultado_media.txt
-    // --------------------------------------------------------
-    // Usamos write() directo para cada línea
-    // Abrir archivo de salida
-    mov x8, #56             // openat
-    mov x0, #-100           // AT_FDCWD
-    adr x1, nombre_salida
-    mov x2, #577            // O_WRONLY | O_CREAT | O_TRUNC
-    mov x3, #0644
-    svc #0
-    mov x19, x0             // x19 = descriptor del archivo salida
-
-    // --- Escribir: MODULE=WEIGHTED_MEAN\n ---
-    bl .escribir_module
-
-    // --- Escribir: TOTAL_VALUES=30\n ---
-    bl .escribir_total
-
-    // --- Escribir: SUM_X=<valor>\n ---
-    bl .escribir_sumx
-
-    // --- Escribir: WEIGHT_SUM=<valor>\n ---
-    bl .escribir_wsum
-
-    // --- Escribir: WEIGHTED_MEAN=<valor>\n ---
-    bl .escribir_mean
-
-    // Cerrar archivo de salida
-    mov x8, #57             // close
-    mov x0, x19
+    // -------------------------------------------------------
+    // PASO 5: Abrir archivo de salida
+    // -------------------------------------------------------
+    mov x8,  SYS_OPENAT
+    mov x0,  AT_FDCWD
+    adr x1,  nombre_salida
+    mov x2,  O_WRONLY | O_CREAT | O_TRUNC
+    mov x3,  PERM_644
     svc #0
 
-    // --------------------------------------------------------
-    // PASO 5: También mostrar en pantalla (stdout)
-    // --------------------------------------------------------
-    bl .imprimir_pantalla
+    // Guardar descriptor
+    adr x4, fd_out
+    str x0, [x4]
+    mov x19, x0             // x19 = fd salida
 
-    // --------------------------------------------------------
-    // PASO 6: Salir del programa
-    // --------------------------------------------------------
-    mov x8, #93             // syscall exit
-    mov x0, #0              // código de salida 0 = éxito
+    // -------------------------------------------------------
+    // PASO 6: Escribir resultado en archivo y en pantalla
+    // -------------------------------------------------------
+    // Escribir en archivo (x19) y stdout (1) a la vez
+    // usando subrutinas
+
+    bl escribir_todo
+
+    // Cerrar archivo
+    mov x8,  SYS_CLOSE
+    mov x0,  x19
+    svc #0
+
+    // -------------------------------------------------------
+    // PASO 7: Salir
+    // -------------------------------------------------------
+    mov x8,  SYS_EXIT
+    mov x0,  #0
     svc #0
 
 
 // ============================================================
-// SUBRUTINA: escribir línea "MODULE=WEIGHTED_MEAN\n"
+// SUBRUTINA: escribir_todo
+// Escribe todas las lineas en archivo (x19) y stdout
 // ============================================================
-.escribir_module:
+escribir_todo:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    mov x8, #64             // write
-    mov x0, x19             // descriptor archivo salida
-    adr x1, lbl_module
-    mov x2, #21             // longitud de "MODULE=WEIGHTED_MEAN\n"
+    // --- MODULE=WEIGHTED_MEAN ---
+    bl esc_module
+
+    // --- TOTAL_VALUES=30 ---
+    bl esc_total
+
+    // --- SUM_X=<valor> ---
+    bl esc_sumx
+
+    // --- WEIGHT_SUM=<valor> ---
+    bl esc_wsum
+
+    // --- WEIGHTED_MEAN=<valor> ---
+    bl esc_mean
+
+    ldp x29, x30, [sp], #16
+    ret
+
+// ============================================================
+// Escribe una linea en archivo y en stdout
+// x19 = fd archivo, x1 = texto, x2 = longitud
+// ============================================================
+esc_linea_doble:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+
+    // Escribir en archivo
+    mov x8,  SYS_WRITE
+    mov x0,  x19
+    svc #0
+
+    // Escribir en stdout
+    mov x8,  SYS_WRITE
+    mov x0,  #1
     svc #0
 
     ldp x29, x30, [sp], #16
     ret
 
 // ============================================================
-// SUBRUTINA: escribir línea "TOTAL_VALUES=30\n"
-// ============================================================
-.escribir_total:
+esc_module:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
-
-    mov x8, #64
+    mov x8, SYS_WRITE
     mov x0, x19
-    adr x1, lbl_total
-    mov x2, #16
+    adr x1, linea_module
+    mov x2, linea_module_len
     svc #0
-
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, linea_module
+    mov x2, linea_module_len
+    svc #0
     ldp x29, x30, [sp], #16
     ret
 
 // ============================================================
-// SUBRUTINA: escribir línea "SUM_X=<valor>\n"
+esc_total:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+    mov x8, SYS_WRITE
+    mov x0, x19
+    adr x1, linea_total
+    mov x2, linea_total_len
+    svc #0
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, linea_total
+    mov x2, linea_total_len
+    svc #0
+    ldp x29, x30, [sp], #16
+    ret
+
 // ============================================================
-.escribir_sumx:
+esc_sumx:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    // Escribir etiqueta "SUM_X="
-    mov x8, #64
+    // Etiqueta
+    mov x8, SYS_WRITE
     mov x0, x19
-    adr x1, lbl_sumx
-    mov x2, #6
+    adr x1, etiq_sumx
+    mov x2, etiq_sumx_len
+    svc #0
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, etiq_sumx
+    mov x2, etiq_sumx_len
     svc #0
 
-    // Convertir suma_x a texto y escribir
+    // Valor
     adr x0, suma_x
     ldr x0, [x0]
-    adr x1, num_buf
-    bl int_a_ascii
+    adr x1, buf_num
+    bl  int_a_ascii
+    bl  esc_buf_num_doble
 
-    // Escribir el número
-    mov x8, #64
-    mov x0, x19
-    adr x1, num_buf
-    bl .strlen_num
-    svc #0
-
-    // Escribir "\n"
-    mov x8, #64
-    mov x0, x19
-    adr x1, newline
-    mov x2, #1
-    svc #0
+    // Newline
+    bl  esc_newline_doble
 
     ldp x29, x30, [sp], #16
     ret
 
 // ============================================================
-// SUBRUTINA: escribir línea "WEIGHT_SUM=<valor>\n"
-// ============================================================
-.escribir_wsum:
+esc_wsum:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    // Escribir etiqueta "WEIGHT_SUM="
-    mov x8, #64
+    mov x8, SYS_WRITE
     mov x0, x19
-    adr x1, lbl_wsum
-    mov x2, #11
+    adr x1, etiq_wsum
+    mov x2, etiq_wsum_len
+    svc #0
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, etiq_wsum
+    mov x2, etiq_wsum_len
     svc #0
 
-    // Convertir suma_pesos a texto
     adr x0, suma_pesos
     ldr x0, [x0]
-    adr x1, num_buf
-    bl int_a_ascii
-
-    // Escribir el número
-    mov x8, #64
-    mov x0, x19
-    adr x1, num_buf
-    bl .strlen_num
-    svc #0
-
-    // Escribir "\n"
-    mov x8, #64
-    mov x0, x19
-    adr x1, newline
-    mov x2, #1
-    svc #0
+    adr x1, buf_num
+    bl  int_a_ascii
+    bl  esc_buf_num_doble
+    bl  esc_newline_doble
 
     ldp x29, x30, [sp], #16
     ret
 
 // ============================================================
-// SUBRUTINA: escribir línea "WEIGHTED_MEAN=<valor>\n"
-// ============================================================
-.escribir_mean:
+esc_mean:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    // Escribir etiqueta "WEIGHTED_MEAN="
-    mov x8, #64
+    mov x8, SYS_WRITE
     mov x0, x19
-    adr x1, lbl_mean
-    mov x2, #14
+    adr x1, etiq_mean
+    mov x2, etiq_mean_len
+    svc #0
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, etiq_mean
+    mov x2, etiq_mean_len
     svc #0
 
-    // Convertir media_pond a texto
     adr x0, media_pond
     ldr x0, [x0]
-    adr x1, num_buf
-    bl int_a_ascii
+    adr x1, buf_num
+    bl  int_a_ascii
+    bl  esc_buf_num_doble
+    bl  esc_newline_doble
 
-    // Escribir el número
-    mov x8, #64
+    ldp x29, x30, [sp], #16
+    ret
+
+// ============================================================
+// Escribe buf_num en archivo y stdout
+// Calcula longitud del string primero
+// ============================================================
+esc_buf_num_doble:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+
+    // Calcular longitud de buf_num
+    adr x4, buf_num
+    mov x5, #0
+strlen_loop:
+    ldrb w6, [x4, x5]
+    cbz w6, strlen_fin
+    add x5, x5, #1
+    b   strlen_loop
+strlen_fin:
+
+    // Escribir en archivo
+    mov x8, SYS_WRITE
     mov x0, x19
-    adr x1, num_buf
-    bl .strlen_num
+    adr x1, buf_num
+    mov x2, x5
     svc #0
 
-    // Escribir "\n"
-    mov x8, #64
+    // Escribir en stdout
+    mov x8, SYS_WRITE
+    mov x0, #1
+    adr x1, buf_num
+    mov x2, x5
+    svc #0
+
+    ldp x29, x30, [sp], #16
+    ret
+
+// ============================================================
+esc_newline_doble:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+
+    mov x8, SYS_WRITE
     mov x0, x19
+    adr x1, newline
+    mov x2, #1
+    svc #0
+
+    mov x8, SYS_WRITE
+    mov x0, #1
     adr x1, newline
     mov x2, #1
     svc #0
@@ -334,41 +401,4 @@ _start:
     ldp x29, x30, [sp], #16
     ret
 
-// ============================================================
-// SUBRUTINA: imprimir resultados en pantalla (stdout)
-// ============================================================
-.imprimir_pantalla:
-    stp x29, x30, [sp, #-16]!
-    mov x29, sp
-
-    // Reusar las mismas subrutinas pero con stdout (fd=1)
-    // Guardamos x19 (fd salida) y lo reemplazamos con 1
-    mov x20, x19
-    mov x19, #1             // stdout
-
-    bl .escribir_module
-    bl .escribir_total
-    bl .escribir_sumx
-    bl .escribir_wsum
-    bl .escribir_mean
-
-    mov x19, x20            // restaurar fd original
-
-    ldp x29, x30, [sp], #16
-    ret
-
-// ============================================================
-// SUBRUTINA INTERNA: calcular longitud de num_buf
-// Retorna x2 = longitud del string en num_buf
-// ============================================================
-.strlen_num:
-    adr x1, num_buf
-    mov x2, #0
-.loop_len:
-    ldrb w3, [x1, x2]
-    cmp w3, #0
-    beq .fin_len
-    add x2, x2, #1
-    b .loop_len
-.fin_len:
-    ret
+// ---- Fin modulo_1_media.s ---------------------------------

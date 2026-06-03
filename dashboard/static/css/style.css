@@ -1,0 +1,341 @@
+/* ----- VARIABLES ----- */
+:root {
+    --primary: #2563eb;
+    --success: #16a34a;
+    --warning: #eab308;
+    --danger: #dc2626;
+    --gray-100: #f8f9fa;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-800: #212529;
+    --white: #ffffff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f1f3f5;
+    color: var(--gray-800);
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* ----- HEADER ----- */
+.header {
+    background: var(--gray-800);
+    color: white;
+    padding: 24px;
+    text-align: center;
+    border-radius: 8px;
+    margin-bottom: 30px;
+}
+
+.header h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+.header p {
+    font-size: 1rem;
+    opacity: 0.8;
+    margin-top: 6px;
+}
+
+/* ----- SECCIONES ----- */
+.section {
+    margin-bottom: 30px;
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-left: 12px;
+    border-left: 4px solid var(--primary);
+}
+
+.card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.card h2, .card h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+/* ----- ESTADO GLOBAL ----- */
+.status-card {
+    text-align: center;
+}
+
+.estado-display {
+    font-size: 2.2rem;
+    font-weight: 700;
+    padding: 20px;
+    margin: 15px 0;
+    border-radius: 8px;
+}
+
+.estado-normal {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.estado-advertencia {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
+.estado-emergencia {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.estado-mensaje {
+    font-size: 1rem;
+    color: var(--gray-600);
+}
+
+/* ----- GRIDS ----- */
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+/* ----- SENSORES ----- */
+.sensor-card {
+    background: var(--gray-100);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.sensor-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.sensor-value {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin: 8px 0;
+}
+
+.sensor-unit {
+    font-size: 0.8rem;
+    color: var(--gray-600);
+}
+
+.progress-bar {
+    height: 6px;
+    background: var(--gray-200);
+    border-radius: 3px;
+    margin-top: 12px;
+    overflow: hidden;
+}
+
+.progress-bar::before {
+    content: '';
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+/* ----- ACTUADORES ----- */
+.actuador-card {
+    background: var(--gray-100);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.actuador-label {
+    font-size: 0.8rem;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.actuador-valor {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 6px;
+    color: var(--gray-800);
+}
+
+/* ----- BOTONES ----- */
+.controles-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px 16px;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gray-800);
+    transition: all 0.15s;
+}
+
+.btn:hover {
+    background: var(--gray-200);
+    border-color: var(--gray-600);
+}
+
+.feedback {
+    margin-top: 15px;
+    padding: 10px;
+    font-size: 0.9rem;
+    text-align: center;
+    background: #dcfce7;
+    color: #166534;
+    border-radius: 6px;
+    display: none;
+}
+
+/* ----- ARM64 ----- */
+.arm64-item {
+    background: var(--gray-100);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.arm64-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.arm64-value {
+    font-family: monospace;
+    font-size: 0.95rem;
+    margin-top: 4px;
+}
+
+.arm64-detail {
+    font-size: 0.75rem;
+    color: var(--gray-600);
+    margin-top: 3px;
+}
+
+.arm64-risk {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+.risk-bajo { background: #dcfce7; color: #166534; }
+.risk-medio { background: #fef9c3; color: #854d0e; }
+.risk-alto { background: #fee2e2; color: #991b1b; }
+
+/* ----- HISTORIAL ----- */
+.timeline {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.evento {
+    padding: 10px 12px;
+    border-left: 3px solid var(--primary);
+    margin-bottom: 8px;
+    background: var(--gray-100);
+    border-radius: 6px;
+}
+
+.evento-fecha {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+    margin-bottom: 3px;
+}
+
+.evento-texto {
+    font-size: 0.85rem;
+}
+
+.evento-alerta {
+    border-left-color: var(--warning);
+}
+
+.evento-emergencia {
+    border-left-color: var(--danger);
+}
+
+/* ----- FOOTER ----- */
+.footer {
+    background: var(--gray-800);
+    color: #adb5bd;
+    text-align: center;
+    padding: 16px;
+    border-radius: 8px;
+    margin-top: 30px;
+    font-size: 0.75rem;
+}
+
+.footer p {
+    margin: 3px 0;
+}
+
+/* ----- RESPONSIVE ----- */
+@media (max-width: 1000px) {
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .grid-4, .grid-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .controles-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .estado-display {
+        font-size: 1.6rem;
+    }
+    
+    .sensor-value {
+        font-size: 1.5rem;
+    }
+}

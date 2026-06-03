@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invernadero Inteligente loT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <h1>Invernadero Inteligente IoT</h1>
+            <p>Raspberry Pi + ARM64 | Monitoreo y Control Remoto</p>
+            <p class="update-info">Actualización automatica</p>
+        </header>
+
+        <!-- ESTADO GLOBAL -->
+        <section class="section">
+            <div class="card status-card" id="statusCard">
+                <h2>Estado Global del Sistema</h2>
+                <div id="estadoGlobal" class="estado-display">Cargando...</div>
+                <p id="estadoMensaje" class="estado-mensaje"></p>
+            </div>
+        </section>
+
+        <!-- SENSORES -->
+        <section class="section">
+            <h2 class="section-title">Monitoreo Ambiental</h2>
+            <div class="grid-4">
+                <div class="sensor-card">
+                    <div class="sensor-label">Temperatura</div>
+                    <div class="sensor-value" id="temperatura">--</div>
+                    <div class="sensor-unit">°C</div>
+                </div>
+                <div class="sensor-card">
+                    <div class="sensor-label">Humedad Ambiente</div>
+                    <div class="sensor-value" id="humedad">--</div>
+                    <div class="sensor-unit">%</div>
+                </div>
+                <div class="sensor-card">
+                    <div class="sensor-label">Nivel de Luz</div>
+                    <div class="sensor-value" id="luz">--</div>
+                    <div class="sensor-unit">lux</div>
+                </div>
+                <div class="sensor-card">
+                    <div class="sensor-label">Nivel de Gas</div>
+                    <div class="sensor-value" id="gas">--</div>
+                    <div class="sensor-unit">ppm</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HUMEDAD DE SUELO -->
+        <section class="section">
+            <h2 class="section-title">Humedad del Suelo</h2>
+            <div class="grid-2">
+                <div class="sensor-card">
+                    <div class="sensor-label">Area de Cultivo 1</div>
+                    <div class="sensor-value" id="suelo1">--</div>
+                    <div class="sensor-unit">%</div>
+                    <div class="progress-bar" id="progress1"></div>
+                </div>
+                <div class="sensor-card">
+                    <div class="sensor-label">Area de Cultivo 2</div>
+                    <div class="sensor-value" id="suelo2">--</div>
+                    <div class="sensor-unit">%</div>
+                    <div class="progress-bar" id="progress2"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ESTADO DE ACTUADORES -->
+        <section class="section">
+            <div class="grid-4">
+                <div class="actuador-card">
+                    <div class="actuador-label">Riego</div>
+                    <div class="actuador-valor" id="riego">--</div>
+                </div>
+                <div class="actuador-card">
+                    <div class="actuador-label">Ventilación</div>
+                    <div class="actuador-valor" id="ventilacion">--</div>
+                </div>
+                <div class="actuador-card">
+                    <div class="actuador-label">Luces</div>
+                    <div class="actuador-valor" id="luces">--</div>
+                </div>
+                <div class="actuador-card">
+                    <div class="actuador-label">Alarma</div>
+                    <div class="actuador-valor" id="alarma">--</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CONTROLES REMOTOS Y ARM64 -->
+        <section class="section">
+            <div class="grid-2">
+                <!-- CONTROLES -->
+                <div class="card">
+                    <h3>Controles Remotos</h3>
+                    <div class="controles-grid">
+                        <button class="btn" data-comando="riego_area1">Riego Area 1</button>
+                        <button class="btn" data-comando="riego_area2">Riego Area 2</button>
+                        <button class="btn" data-comando="luces_on">Encender Luces</button>
+                        <button class="btn" data-comando="luces_off">Apagar Luces</button>
+                        <button class="btn" data-comando="ventilador_on">Activar Ventilador</button>
+                        <button class="btn" data-comando="ventilador_off">Detener Ventilador</button>
+                        <button class="btn" data-comando="modo_auto">Modo Automatico</button>
+                        <button class="btn" data-comando="modo_manual">Modo Manual</button>
+                        <button class="btn" data-comando="reset">Restablecer Estado</button>
+                        <button class="btn" data-comando="silenciar">Silenciar Alarma</button>
+                    </div>
+                    <div id="feedback" class="feedback"></div>
+                </div>
+
+                <!-- ARM64 RESULTS -->
+                <div class="card">
+                    <h3>Análisis ARM64</h3>
+                    <div id="arm64Results">
+                        <div class="arm64-item">
+                            <div class="arm64-title">Media Aritmética Ponderada</div>
+                            <div class="arm64-value" id="mediaPonderada">31.2</div>
+                            <div class="arm64-detail">Σ(X*W)/ΣW = 31.2</div>
+                        </div>
+                        <div class="arm64-item">
+                            <div class="arm64-title">Varianza y Desviación Estándar</div>
+                            <div class="arm64-value" id="varianza">Varianza: 18.5 | Std Dev: 4.3</div>
+                        </div>
+                        <div class="arm64-item">
+                            <div class="arm64-title">Detección de Anomalias</div>
+                            <div class="arm64-value" id="anomalias">3 anomalias</div>
+                            <div class="arm64-risk" id="riesgo">Riesgo: MEDIUM</div>
+                        </div>
+                        <div class="arm64-item">
+                            <div class="arm64-title">Predicción Lineal Simple</div>
+                            <div class="arm64-value" id="prediccion">Proximo valor: 34.20</div>
+                        </div>
+                        <div class="arm64-item">
+                            <div class="arm64-title">Tendencia Acumulada Avanzada</div>
+                            <div class="arm64-value" id="tendencia">Tendencia: UP (↑)</div>
+                            <div class="arm64-detail">18 incrementos, racha maxima: 5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HISTORIAL -->
+        <section class="section">
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Ultimos Eventos y Alertas</h3>
+                    <div id="eventosList" class="timeline">
+                        <!-- JS -->
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Ultimos Comandos y Activaciones</h3>
+                    <div id="comandosList" class="timeline">
+                        <!-- JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <p>Universidad de San Carlos de Guatemala - Facultad de Ingeniería</p>
+            <p>ACYE 1 | Proyecto: Invernadero Inteligente IoT</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

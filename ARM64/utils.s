@@ -1,47 +1,56 @@
-// ============================================================
-// utils.s - Biblioteca común para módulos ARM64
-// Proyecto: Invernadero Inteligente IoT
-// ============================================================
-// Esta biblioteca contiene funciones que todos los módulos
-// comparten para no repetir código.
-//
-// FUNCIONES DISPONIBLES:
-//   - abrir_archivo     : abre lecturas.csv para lectura
-//   - cerrar_archivo    : cierra el archivo
-//   - leer_datos        : lee las 30 filas y extrae una columna
-//   - escribir_archivo  : escribe resultados en un .txt
-//   - int_a_ascii       : convierte número entero a texto
-// ============================================================
+@ ============================================================
+@ utils.s - Biblioteca comun para modulos ARM64
+@ Proyecto: Invernadero Inteligente IoT
+@ ============================================================
+@ FUNCIONES DISPONIBLES:
+@   - abrir_archivo   : abre lecturas.csv para lectura
+@   - cerrar_archivo  : cierra el archivo
+@   - leer_datos      : lee 30 filas y extrae una columna
+@   - escribir_archivo: escribe resultados en un .txt
+@   - int_a_ascii     : convierte entero a texto ASCII
+@   - ascii_a_int     : convierte texto ASCII a entero
+@ ============================================================
 
+@ ---- Llamadas al sistema Linux AArch64 --------------------
+.equ SYS_OPENAT,  56
+.equ SYS_CLOSE,   57
+.equ SYS_READ,    63
+.equ SYS_WRITE,   64
+.equ AT_FDCWD,   -100
+.equ O_RDONLY,    0
+.equ O_WRONLY,    1
+.equ O_CREAT,     64
+.equ O_TRUNC,     512
+.equ PERM_644,    0644
+
+@ ============================================================
+@ SECCION DE DATOS
+@ ============================================================
 .section .data
 
-// Nombre del archivo de entrada (siempre el mismo)
 nombre_csv:
     .asciz "lecturas.csv"
 
-// Mensaje de error si no abre el archivo
-error_msg:
-    .asciz "Error: no se pudo abrir lecturas.csv\n"
-error_msg_len = . - error_msg
+error_apertura_msg:
+    .ascii "Error: no se pudo abrir lecturas.csv\n"
+    .equ error_apertura_msg_len, . - error_apertura_msg
 
-// Buffer para leer líneas del CSV (200 caracteres máximo por línea)
-.comm buffer_linea, 200, 8
+@ ============================================================
+@ SECCION BSS
+@ ============================================================
+.section .bss
 
-// Arreglo donde se guardan los 30 datos extraídos
-// Cada número ocupa 8 bytes (64 bits), 30 números = 240 bytes
-.comm datos, 240, 8
+buffer_linea:   .skip 200
+datos:          .skip 240       @ 30 enteros x 8 bytes
+fd_entrada:     .skip 8
+fd_salida:      .skip 8
+buffer_num:     .skip 32
 
-// Variable para guardar el descriptor del archivo abierto
-.comm fd_entrada, 8, 8
-
-// Variable para guardar el descriptor del archivo de salida
-.comm fd_salida, 8, 8
-
-// Buffer temporal para conversiones de número a texto
-.comm buffer_num, 32, 8
-
-// ============================================================
+@ ============================================================
+@ SECCION DE CODIGO
+@ ============================================================
 .section .text
+
 .global abrir_archivo
 .global cerrar_archivo
 .global leer_datos
@@ -49,427 +58,361 @@ error_msg_len = . - error_msg
 .global int_a_ascii
 .global ascii_a_int
 
-// ============================================================
-// FUNCIÓN: abrir_archivo
-// ¿Qué hace? Abre el archivo lecturas.csv
-// ¿Cómo usarla?
-//   bl abrir_archivo
-//   (si x0 es negativo después, hubo un error)
-// ============================================================
+@ ============================================================
+@ FUNCION: abrir_archivo
+@ Abre lecturas.csv en modo solo lectura.
+@ Retorna: x0 = descriptor de archivo (negativo si error)
+@ ============================================================
 abrir_archivo:
-    // Guardar el registro de retorno (lr) para poder volver
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    // syscall open(filename, O_RDONLY, 0)
-    // x8 = número de syscall (openat = 56 en ARM64)
-    // x0 = AT_FDCWD (-100) significa directorio actual
-    // x1 = nombre del archivo
-    // x2 = flags: 0 = solo lectura
-    mov x8, #56             // número de syscall openat
-    mov x0, #-100           // AT_FDCWD (directorio actual)
-    adr x1, nombre_csv      // dirección del nombre del archivo
-    mov x2, #0              // O_RDONLY (solo lectura)
-    mov x3, #0              // modo (no aplica para lectura)
-    svc #0                  // llamada al sistema operativo
+    mov x8,  SYS_OPENAT
+    mov x0,  AT_FDCWD
+    adr x1,  nombre_csv
+    mov x2,  O_RDONLY
+    mov x3,  0
+    svc 0
 
-    // x0 ahora tiene el "descriptor de archivo" (un número)
-    // Si es negativo, hubo un error
-    cmp x0, #0
-    blt .error_apertura     // si x0 < 0, saltar a error
+    cmp x0,  0
+    blt abrir_error
 
-    // Guardar el descriptor para usarlo después
-    adr x1, fd_entrada
-    str x0, [x1]
+    @ Guardar descriptor en fd_entrada
+    adr x1,  fd_entrada
+    str x0,  [x1]
 
-    // Salir sin error (x0 queda con el descriptor)
     ldp x29, x30, [sp], #16
     ret
 
-.error_apertura:
-    // Imprimir mensaje de error
-    mov x8, #64             // syscall write
-    mov x0, #2              // stderr
-    adr x1, error_msg
-    mov x2, #error_msg_len
-    svc #0
+abrir_error:
+    @ Escribir mensaje de error en stderr
+    mov x8,  SYS_WRITE
+    mov x0,  2
+    adr x1,  error_apertura_msg
+    mov x2,  error_apertura_msg_len
+    svc 0
 
-    mov x0, #-1             // retornar -1 como señal de error
+    mov x0,  -1
     ldp x29, x30, [sp], #16
     ret
 
-// ============================================================
-// FUNCIÓN: cerrar_archivo
-// ¿Qué hace? Cierra el archivo abierto
-// ¿Cómo usarla?
-//   mov x0, fd  // descriptor del archivo
-//   bl cerrar_archivo
-// ============================================================
+@ ============================================================
+@ FUNCION: cerrar_archivo
+@ Cierra el archivo cuyo descriptor esta en x0.
+@ ============================================================
 cerrar_archivo:
     stp x29, x30, [sp, #-16]!
     mov x29, sp
 
-    // syscall close(fd)
-    mov x8, #57             // número de syscall close
-    // x0 ya tiene el descriptor del archivo
-    svc #0
+    mov x8,  SYS_CLOSE
+    svc 0
 
     ldp x29, x30, [sp], #16
     ret
 
-// ============================================================
-// FUNCIÓN: leer_datos
-// ¿Qué hace? Lee lecturas.csv y extrae los 30 valores
-//            de la columna indicada
-// Parámetro de entrada:
-//   x0 = número de columna a extraer
-//        0=ID, 1=TEMP, 2=HUM_AIRE, 3=HUM_SUELO_1,
-//        4=HUM_SUELO_2, 5=LUZ, 6=GAS
-// Resultado:
-//   Los 30 valores quedan guardados en el arreglo 'datos'
-// ============================================================
+@ ============================================================
+@ FUNCION: leer_datos
+@ Lee lecturas.csv y extrae 30 valores de la columna dada.
+@ Parametro: x0 = numero de columna (0=ID,1=TEMP,2=HUM_AIRE,
+@            3=HUM_SUELO_1,4=HUM_SUELO_2,5=LUZ,6=GAS)
+@ Resultado: valores en el arreglo 'datos', x0=filas leidas
+@ ============================================================
 leer_datos:
-    stp x29, x30, [sp, #-48]!
+    stp x29, x30, [sp, #-64]!
     mov x29, sp
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
+    stp x23, x24, [sp, #48]
 
-    // Guardar registros que vamos a usar
-    str x19, [sp, #16]      // x19 = columna objetivo
-    str x20, [sp, #24]      // x20 = contador de filas
-    str x21, [sp, #32]      // x21 = puntero al arreglo datos
-    str x22, [sp, #40]      // x22 = descriptor del archivo
+    mov x19, x0             @ columna objetivo
 
-    mov x19, x0             // guardar número de columna
+    @ Abrir archivo
+    bl  abrir_archivo
+    cmp x0,  0
+    blt leer_datos_error
+    mov x22, x0             @ descriptor del archivo
 
-    // Abrir el archivo
-    bl abrir_archivo
-    cmp x0, #0
-    blt .leer_error
-    mov x22, x0             // guardar descriptor
+    mov x20, 0              @ contador de filas
+    adr x21, datos          @ puntero base al arreglo
 
-    // Inicializar contador de filas en 0
-    mov x20, #0
+    @ Saltar cabecera
+    mov x0,  x22
+    adr x1,  buffer_linea
+    mov x2,  200
+    bl  utils_leer_linea
 
-    // Apuntar al inicio del arreglo datos
-    adr x21, datos
+leer_datos_loop:
+    cmp x20, 30
+    bge leer_datos_listo
 
-    // --- Saltar la primera línea (encabezado del CSV) ---
-    mov x0, x22
-    adr x1, buffer_linea
-    mov x2, #200
-    bl .leer_linea_completa
+    @ Leer siguiente linea
+    mov x0,  x22
+    adr x1,  buffer_linea
+    mov x2,  200
+    bl  utils_leer_linea
 
-.loop_filas:
-    // ¿Ya leímos 30 filas?
-    cmp x20, #30
-    bge .leer_listo         // si ya son 30, terminar
+    @ EOF o error
+    cmp x0,  0
+    ble leer_datos_listo
 
-    // Leer una línea del archivo
-    mov x0, x22
-    adr x1, buffer_linea
-    mov x2, #200
-    bl .leer_linea_completa
+    @ Verificar marcador '$'
+    adr x9,  buffer_linea
+    ldrb w10, [x9]
+    cmp w10, '$'
+    beq leer_datos_listo
 
-    // ¿Llegamos al final del archivo?
-    cmp x0, #0
-    ble .leer_listo
+    @ Extraer columna
+    adr x0,  buffer_linea
+    mov x1,  x19
+    bl  utils_extraer_columna
 
-    // Extraer la columna que nos interesa
-    adr x0, buffer_linea    // x0 = inicio de la línea
-    mov x1, x19             // x1 = número de columna
-    bl .extraer_columna     // resultado en x0
+    @ Guardar en datos[x20]
+    str x0,  [x21, x20, lsl #3]
+    add x20, x20, 1
+    b   leer_datos_loop
 
-    // Guardar el valor en el arreglo datos
-    str x0, [x21, x20, lsl #3]  // datos[x20] = valor
+leer_datos_listo:
+    mov x0,  x22
+    bl  cerrar_archivo
+    mov x0,  x20
 
-    // Incrementar contador de filas
-    add x20, x20, #1
-
-    b .loop_filas           // siguiente fila
-
-.leer_listo:
-    // Cerrar el archivo
-    mov x0, x22
-    bl cerrar_archivo
-
-    mov x0, x20             // retornar cuántos datos se leyeron
-
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
-    ldr x21, [sp, #32]
-    ldr x22, [sp, #40]
-    ldp x29, x30, [sp], #48
+    ldp x23, x24, [sp, #48]
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #64
     ret
 
-.leer_error:
-    mov x0, #0
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
-    ldr x21, [sp, #32]
-    ldr x22, [sp, #40]
-    ldp x29, x30, [sp], #48
+leer_datos_error:
+    mov x0,  0
+    ldp x23, x24, [sp, #48]
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #64
     ret
 
-// ============================================================
-// FUNCIÓN INTERNA: .leer_linea_completa
-// Lee caracteres uno por uno hasta encontrar '\n' o EOF
-// x0 = descriptor archivo, x1 = buffer, x2 = tamaño máximo
-// Retorna en x0: cantidad de caracteres leídos (0 = EOF)
-// ============================================================
-.leer_linea_completa:
+@ ============================================================
+@ FUNCION INTERNA: utils_leer_linea
+@ Lee caracteres hasta encontrar '\n' o EOF.
+@ x0 = descriptor, x1 = buffer, x2 = tamanio maximo
+@ Retorna x0 = cantidad de caracteres leidos (0 = EOF)
+@ ============================================================
+utils_leer_linea:
     stp x29, x30, [sp, #-32]!
     mov x29, sp
-    str x19, [sp, #16]
-    str x20, [sp, #24]
+    stp x19, x20, [sp, #16]
 
-    mov x19, x0             // descriptor
-    mov x20, x1             // buffer
-    mov x3, #0              // contador de caracteres
+    mov x19, x0             @ descriptor
+    mov x20, x1             @ buffer
+    mov x3,  0              @ contador
 
-.loop_char:
-    // Leer 1 byte del archivo
-    mov x8, #63             // syscall read
-    mov x0, x19
-    add x1, x20, x3        // posición actual en buffer
-    mov x2, #1              // leer 1 byte
-    svc #0
+utils_leer_linea_loop:
+    mov x8,  SYS_READ
+    mov x0,  x19
+    add x1,  x20, x3
+    mov x2,  1
+    svc 0
 
-    // ¿Se leyó algo?
-    cmp x0, #0
-    ble .fin_linea          // EOF o error
+    cmp x0,  0
+    ble utils_leer_linea_fin
 
-    // ¿Es un salto de línea '\n'?
     ldrb w1, [x20, x3]
-    cmp w1, #10             // ASCII de '\n' es 10
-    beq .fin_linea
+    cmp w1,  10             @ '\n'
+    beq utils_leer_linea_fin
 
-    // Siguiente carácter
-    add x3, x3, #1
+    add x3,  x3,  1
+    cmp x3,  199
+    bge utils_leer_linea_fin
+    b   utils_leer_linea_loop
 
-    // ¿Buffer lleno?
-    cmp x3, #199
-    bge .fin_linea
-
-    b .loop_char
-
-.fin_linea:
-    // Poner terminador nulo al final
+utils_leer_linea_fin:
     strb wzr, [x20, x3]
-    mov x0, x3              // retornar cantidad leída
+    mov x0,  x3
 
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
+    ldp x19, x20, [sp, #16]
     ldp x29, x30, [sp], #32
     ret
 
-// ============================================================
-// FUNCIÓN INTERNA: .extraer_columna
-// Extrae el valor numérico de la columna N de una línea CSV
-// x0 = puntero a la línea (texto), x1 = número de columna
-// Retorna en x0: el valor numérico de esa columna
-// ============================================================
-.extraer_columna:
+@ ============================================================
+@ FUNCION INTERNA: utils_extraer_columna
+@ Extrae el valor numerico de la columna N de una linea CSV.
+@ x0 = puntero a la linea, x1 = numero de columna
+@ Retorna x0 = valor numerico
+@ ============================================================
+utils_extraer_columna:
     stp x29, x30, [sp, #-32]!
     mov x29, sp
-    str x19, [sp, #16]
-    str x20, [sp, #24]
+    stp x19, x20, [sp, #16]
 
-    mov x19, x0             // puntero a la línea
-    mov x20, x1             // columna objetivo
-    mov x2, #0              // columna actual = 0
+    mov x19, x0             @ puntero a la linea
+    mov x20, x1             @ columna objetivo
+    mov x2,  0              @ columna actual
 
-.buscar_columna:
-    // ¿Ya estamos en la columna correcta?
-    cmp x2, x20
-    beq .columna_encontrada
+utils_ec_buscar:
+    cmp x2,  x20
+    beq utils_ec_encontrada
 
-    // Buscar la próxima coma
-.buscar_coma:
-    ldrb w3, [x19]          // leer carácter actual
-    cmp w3, #0              // ¿fin de cadena?
-    beq .columna_no_encontrada
-    cmp w3, #44             // ASCII de ',' es 44
-    beq .siguiente_columna
-    add x19, x19, #1        // avanzar un carácter
-    b .buscar_coma
+utils_ec_buscar_coma:
+    ldrb w3, [x19]
+    cmp w3,  0
+    beq utils_ec_no_encontrada
+    cmp w3,  44             @ ','
+    beq utils_ec_siguiente_col
+    add x19, x19, 1
+    b   utils_ec_buscar_coma
 
-.siguiente_columna:
-    add x19, x19, #1        // saltar la coma
-    add x2, x2, #1          // incrementar columna actual
-    b .buscar_columna
+utils_ec_siguiente_col:
+    add x19, x19, 1         @ saltar la coma
+    add x2,  x2,  1
+    b   utils_ec_buscar
 
-.columna_encontrada:
-    // x19 apunta al inicio del número en texto
-    // Convertir de ASCII a entero
-    mov x0, x19
-    bl ascii_a_int          // resultado en x0
+utils_ec_encontrada:
+    mov x0,  x19
+    bl  ascii_a_int
 
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
+    ldp x19, x20, [sp, #16]
     ldp x29, x30, [sp], #32
     ret
 
-.columna_no_encontrada:
-    mov x0, #0
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
+utils_ec_no_encontrada:
+    mov x0,  0
+    ldp x19, x20, [sp, #16]
     ldp x29, x30, [sp], #32
     ret
 
-// ============================================================
-// FUNCIÓN: ascii_a_int
-// ¿Qué hace? Convierte texto "123" al número 123
-// Parámetro: x0 = puntero al texto con el número
-// Resultado: x0 = el número entero
-//
-// Ejemplo: si x0 apunta a "28\0", retorna 28
-// ============================================================
+@ ============================================================
+@ FUNCION: ascii_a_int
+@ Convierte texto "123" al numero entero 123.
+@ Parametro: x0 = puntero al texto
+@ Retorna:   x0 = numero entero
+@ ============================================================
 ascii_a_int:
-    mov x1, #0              // resultado acumulado = 0
+    mov x1,  0              @ resultado = 0
 
-.loop_ascii:
-    ldrb w2, [x0]           // leer carácter actual
-    cmp w2, #48             // ASCII '0' = 48
-    blt .fin_ascii          // si es menor que '0', terminar
-    cmp w2, #57             // ASCII '9' = 57
-    bgt .fin_ascii          // si es mayor que '9', terminar
+ascii_a_int_loop:
+    ldrb w2, [x0]
+    cmp w2,  48             @ '0'
+    blt ascii_a_int_fin
+    cmp w2,  57             @ '9'
+    bgt ascii_a_int_fin
 
-    // resultado = resultado * 10 + (caracter - '0')
-    mov x3, #10
-    mul x1, x1, x3          // resultado * 10
-    sub w2, w2, #48         // convertir ASCII a dígito
-    add x1, x1, x2          // sumar el dígito
+    mov x3,  10
+    mul x1,  x1, x3
+    sub w2,  w2, 48
+    add x1,  x1, x2
 
-    add x0, x0, #1          // siguiente carácter
-    b .loop_ascii
+    add x0,  x0, 1
+    b   ascii_a_int_loop
 
-.fin_ascii:
-    mov x0, x1              // retornar el número
+ascii_a_int_fin:
+    mov x0,  x1
     ret
 
-// ============================================================
-// FUNCIÓN: int_a_ascii
-// ¿Qué hace? Convierte el número 123 al texto "123"
-// Parámetros:
-//   x0 = el número a convertir
-//   x1 = puntero al buffer donde escribir el texto
-// Resultado: el texto queda en el buffer apuntado por x1
-// ============================================================
+@ ============================================================
+@ FUNCION: int_a_ascii
+@ Convierte el numero 123 al texto "123".
+@ Parametros: x0 = numero, x1 = buffer destino
+@ ============================================================
 int_a_ascii:
     stp x29, x30, [sp, #-32]!
     mov x29, sp
-    str x19, [sp, #16]
-    str x20, [sp, #24]
+    stp x19, x20, [sp, #16]
 
-    mov x19, x0             // número a convertir
-    mov x20, x1             // buffer de destino
+    mov x19, x0             @ numero
+    mov x20, x1             @ buffer destino
 
-    // Caso especial: el número es 0
-    cmp x19, #0
-    bne .convertir_normal
-    mov w2, #48             // ASCII '0'
+    @ Caso especial: numero es 0
+    cbnz x19, int_a_ascii_normal
+    mov w2,  48             @ '0'
     strb w2, [x20]
-    mov w2, #0
-    strb w2, [x20, #1]
-    b .fin_int_ascii
+    strb wzr, [x20, #1]
+    b   int_a_ascii_fin
 
-.convertir_normal:
-    // Usamos un buffer temporal para construir al revés
-    adr x2, buffer_num
-    mov x3, #0              // contador de dígitos
+int_a_ascii_normal:
+    adr x2,  buffer_num
+    mov x3,  0              @ contador de digitos
 
-.extraer_digitos:
-    cmp x19, #0
-    beq .invertir_digitos
+int_a_ascii_extraer:
+    cbz x19, int_a_ascii_invertir
+    mov x4,  10
+    udiv x5, x19, x4
+    msub x6, x5, x4, x19   @ x6 = x19 % 10
+    add w6,  w6,  48        @ a ASCII
+    strb w6, [x2, x3]
+    add x3,  x3,  1
+    mov x19, x5
+    b   int_a_ascii_extraer
 
-    // dígito = número % 10
-    mov x4, #10
-    udiv x5, x19, x4        // x5 = número / 10
-    msub x6, x5, x4, x19   // x6 = número - (x5 * 10) = número % 10
+int_a_ascii_invertir:
+    mov x4,  0
 
-    add w6, w6, #48         // convertir a ASCII
-    strb w6, [x2, x3]       // guardar en buffer temporal
-    add x3, x3, #1          // siguiente posición
-
-    mov x19, x5             // número = número / 10
-    b .extraer_digitos
-
-.invertir_digitos:
-    // Los dígitos quedaron al revés, invertir al buffer destino
-    mov x4, #0              // índice del destino
-
-.loop_invertir:
-    cmp x3, #0
-    beq .agregar_nulo
-    sub x3, x3, #1
+int_a_ascii_inv_loop:
+    cbz x3,  int_a_ascii_nulo
+    sub x3,  x3,  1
     ldrb w5, [x2, x3]
     strb w5, [x20, x4]
-    add x4, x4, #1
-    b .loop_invertir
+    add x4,  x4,  1
+    b   int_a_ascii_inv_loop
 
-.agregar_nulo:
-    strb wzr, [x20, x4]     // terminar con '\0'
+int_a_ascii_nulo:
+    strb wzr, [x20, x4]
 
-.fin_int_ascii:
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
+int_a_ascii_fin:
+    ldp x19, x20, [sp, #16]
     ldp x29, x30, [sp], #32
     ret
 
-// ============================================================
-// FUNCIÓN: escribir_archivo
-// ¿Qué hace? Abre un archivo .txt y escribe contenido
-// Parámetros:
-//   x0 = puntero al nombre del archivo (ej: "resultado.txt")
-//   x1 = puntero al contenido a escribir
-//   x2 = cantidad de bytes a escribir
-// ============================================================
+@ ============================================================
+@ FUNCION: escribir_archivo
+@ Abre/crea un archivo .txt y escribe contenido.
+@ Parametros:
+@   x0 = puntero al nombre del archivo
+@   x1 = puntero al contenido
+@   x2 = cantidad de bytes a escribir
+@ ============================================================
 escribir_archivo:
-    stp x29, x30, [sp, #-32]!
+    stp x29, x30, [sp, #-48]!
     mov x29, sp
-    str x19, [sp, #16]
-    str x20, [sp, #24]
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
 
-    mov x19, x1             // guardar contenido
-    mov x20, x2             // guardar tamaño
+    mov x19, x1             @ contenido
+    mov x20, x2             @ tamanio
+    mov x21, x0             @ nombre del archivo
 
-    // Abrir (o crear) el archivo de salida
-    // flags: O_WRONLY(1) | O_CREAT(64) | O_TRUNC(512) = 577
-    mov x8, #56             // openat
-    mov x0, #-100           // AT_FDCWD
-    // x0 (nombre) ya viene como parámetro... necesitamos guardarlo
-    // Ajuste: el nombre viene en x0, lo movemos a x1
-    mov x1, x0
-    mov x0, #-100
-    mov x2, #577            // O_WRONLY | O_CREAT | O_TRUNC
-    mov x3, #0644           // permisos del archivo
-    svc #0
+    @ Abrir/crear archivo de salida
+    mov x8,  SYS_OPENAT
+    mov x0,  AT_FDCWD
+    mov x1,  x21
+    mov x2,  O_WRONLY | O_CREAT | O_TRUNC
+    mov x3,  PERM_644
+    svc 0
 
-    cmp x0, #0
-    blt .escribir_error
+    cmp x0,  0
+    blt escribir_archivo_error
+    mov x22, x0             @ descriptor de salida
 
-    // Escribir el contenido
-    mov x3, x0              // guardar descriptor
-    mov x8, #64             // syscall write
-    mov x0, x3
-    mov x1, x19             // contenido
-    mov x2, x20             // tamaño
-    svc #0
+    @ Escribir contenido
+    mov x8,  SYS_WRITE
+    mov x0,  x22
+    mov x1,  x19
+    mov x2,  x20
+    svc 0
 
-    // Cerrar el archivo
-    mov x0, x3
-    bl cerrar_archivo
+    @ Cerrar archivo
+    mov x0,  x22
+    bl  cerrar_archivo
 
-    mov x0, #0              // éxito
-
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
-    ldp x29, x30, [sp], #32
+    mov x0,  0
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #48
     ret
 
-.escribir_error:
-    mov x0, #-1
-    ldr x19, [sp, #16]
-    ldr x20, [sp, #24]
-    ldp x29, x30, [sp], #32
+escribir_archivo_error:
+    mov x0,  -1
+    ldp x21, x22, [sp, #32]
+    ldp x19, x20, [sp, #16]
+    ldp x29, x30, [sp], #48
     ret
 
+@ ---- Fin utils.s ------------------------------------------

@@ -328,30 +328,7 @@ spc_fin:
     ret
 
 
-// ===========================================================
-// SUBRUTINA: subr_calcular_tendencia
-//
-// Calcula tendencia sobre un array de 30 datos.
-//
-// Parametros:
-//   x0 = puntero al array de datos (arr_suelo1 o arr_suelo2)
-//   x1 = puntero al bloque de resultados (s1_* o s2_*)
-//        El bloque tiene 5 campos x 8 bytes en orden:
-//        [0]=increments [1]=decrements [2]=max_up
-//        [3]=max_down   [4]=accum_diff
-//
-// Registros:
-//   x19 = puntero al array de datos
-//   x20 = puntero al bloque de resultados
-//   x21 = indice i
-//   x22 = incrementos
-//   x23 = decrementos
-//   x24 = racha_up actual
-//   x25 = racha_down actual
-//   x26 = max_up
-//   x27 = max_down
-//   x28 = accum_diff
-// ===========================================================
+
 subr_calcular_tendencia:
     stp  x29, x30, [sp, #-96]!
     mov  x29, sp

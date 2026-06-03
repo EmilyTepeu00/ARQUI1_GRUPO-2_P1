@@ -42,6 +42,7 @@ error_apertura_msg:
 
 buffer_linea:   .skip 200
 datos:          .skip 240       // 30 enteros x 8 bytes
+.global datos
 fd_entrada:     .skip 8
 fd_salida:      .skip 8
 buffer_num:     .skip 32
@@ -54,6 +55,7 @@ buffer_num:     .skip 32
 .global abrir_archivo
 .global cerrar_archivo
 .global leer_datos
+.global datos
 .global escribir_archivo
 .global int_a_ascii
 .global ascii_a_int

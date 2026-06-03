@@ -4,19 +4,17 @@
 // Proyecto: Invernadero Inteligente IoT - ACYE1
 // Integrante 5
 //
-// Variable analizada: HUM_SUELO_1 (columna indice 3)
+// Variables analizadas:
+//   - HUM_SUELO_1 (columna indice 3)
+//   - HUM_SUELO_2 (columna indice 4)
+//
 // Entrada : lecturas.csv
 // Salida  : resultado_tendencia.txt
 //
-// Formato esperado resultado_tendencia.txt:
-//   MODULE=ADVANCED_TREND
-//   TOTAL_VALUES=30
-//   INCREMENTS=<n>
-//   DECREMENTS=<n>
-//   MAX_UP_STREAK=<n>
-//   MAX_DOWN_STREAK=<n>
-//   ACCUM_DIFF=<n>
-//   TREND=UP | DOWN | STABLE
+// Compilar en VM x86:
+//   aarch64-linux-gnu-as -o utils.o utils.s
+//   aarch64-linux-gnu-as -o modulo_5_tendencia.o modulo_5_tendencia.s
+//   aarch64-linux-gnu-ld -o modulo_5_tendencia modulo_5_tendencia.o utils.o
 //
 // Compilar en Raspberry Pi:
 //   as -o utils.o utils.s
@@ -41,42 +39,54 @@
 .equ O_TRUNC,     512
 .equ PERM_644,    0644
 
-// ---- Columna objetivo -------------------------------------
+// ---- Columnas objetivo ------------------------------------
 // ID=0, TEMP=1, HUM_AIRE=2, HUM_SUELO_1=3, HUM_SUELO_2=4
-// LUZ=5, GAS=6, RIEGO_1=7, RIEGO_2=8
-.equ COL_OBJETIVO, 3            // HUM_SUELO_1
-.equ N_DATOS,      30           // exactamente 30 lecturas
+.equ COL_SUELO_1,  3
+.equ COL_SUELO_2,  4
+.equ N_DATOS,      30
 
 // ===========================================================
 // SECCION DE DATOS
 // ===========================================================
 .section .data
 
-// Nombres de archivos
 archivo_entrada:  .asciz "lecturas.csv"
 archivo_salida:   .asciz "resultado_tendencia.txt"
 
-// Lineas fijas de salida
+// ---- Etiquetas de salida fijas ----------------------------
 str_module:       .ascii "MODULE=ADVANCED_TREND\n"
 .equ str_module_len, . - str_module
 
 str_total:        .ascii "TOTAL_VALUES=30\n"
 .equ str_total_len, . - str_total
 
-str_inc_label:    .ascii "INCREMENTS="
-.equ str_inc_label_len, . - str_inc_label
+// Separador entre las dos secciones
+str_sep:          .ascii "---\n"
+.equ str_sep_len, . - str_sep
 
-str_dec_label:    .ascii "DECREMENTS="
-.equ str_dec_label_len, . - str_dec_label
+// Etiquetas HUM_SUELO_1
+str_area1:        .ascii "AREA=HUM_SUELO_1\n"
+.equ str_area1_len, . - str_area1
 
-str_mup_label:    .ascii "MAX_UP_STREAK="
-.equ str_mup_label_len, . - str_mup_label
+// Etiquetas HUM_SUELO_2
+str_area2:        .ascii "AREA=HUM_SUELO_2\n"
+.equ str_area2_len, . - str_area2
 
-str_mdn_label:    .ascii "MAX_DOWN_STREAK="
-.equ str_mdn_label_len, . - str_mdn_label
+// Etiquetas de valores
+str_inc_lbl:      .ascii "INCREMENTS="
+.equ str_inc_lbl_len, . - str_inc_lbl
 
-str_acc_label:    .ascii "ACCUM_DIFF="
-.equ str_acc_label_len, . - str_acc_label
+str_dec_lbl:      .ascii "DECREMENTS="
+.equ str_dec_lbl_len, . - str_dec_lbl
+
+str_mup_lbl:      .ascii "MAX_UP_STREAK="
+.equ str_mup_lbl_len, . - str_mup_lbl
+
+str_mdn_lbl:      .ascii "MAX_DOWN_STREAK="
+.equ str_mdn_lbl_len, . - str_mdn_lbl
+
+str_acc_lbl:      .ascii "ACCUM_DIFF="
+.equ str_acc_lbl_len, . - str_acc_lbl
 
 str_trend_up:     .ascii "TREND=UP\n"
 .equ str_trend_up_len, . - str_trend_up
@@ -91,22 +101,34 @@ str_newline:      .ascii "\n"
 str_minus:        .ascii "-"
 
 // ===========================================================
-// SECCION BSS  (variables sin inicializar)
+// SECCION BSS
 // ===========================================================
 .section .bss
 
-buf_lectura:   .skip 4096       // buffer para leer el CSV completo
-buf_conv:      .skip 32         // buffer para conversion int->ASCII
-arr_datos:     .skip 240        // 30 enteros x 8 bytes = 240 bytes
-bytes_leidos:  .skip 8          // cuantos bytes leyo SYS_READ
-fd_salida:     .skip 8          // descriptor del archivo de salida
+buf_csv:          .skip 4096    // buffer para todo el CSV
+buf_conv:         .skip 32      // buffer conversion int->ASCII
+bytes_leidos:     .skip 8       // bytes leidos del CSV
 
-// Variables resultado
-res_increments:    .skip 8
-res_decrements:    .skip 8
-res_max_up:        .skip 8
-res_max_down:      .skip 8
-res_accum_diff:    .skip 8
+// Arrays de datos para cada columna
+arr_suelo1:       .skip 240     // 30 x 8 bytes HUM_SUELO_1
+arr_suelo2:       .skip 240     // 30 x 8 bytes HUM_SUELO_2
+
+// Resultados HUM_SUELO_1
+s1_increments:    .skip 8
+s1_decrements:    .skip 8
+s1_max_up:        .skip 8
+s1_max_down:      .skip 8
+s1_accum_diff:    .skip 8
+
+// Resultados HUM_SUELO_2
+s2_increments:    .skip 8
+s2_decrements:    .skip 8
+s2_max_up:        .skip 8
+s2_max_down:      .skip 8
+s2_accum_diff:    .skip 8
+
+// Descriptor archivo salida
+fd_out:           .skip 8
 
 // ===========================================================
 // SECCION DE CODIGO
@@ -115,48 +137,58 @@ res_accum_diff:    .skip 8
 .global _start
 
 // -----------------------------------------------------------
-// _start
-// Punto de entrada. Orquesta: abrir -> leer -> parsear ->
-// calcular -> escribir resultado -> salir.
+// _start - punto de entrada
 // -----------------------------------------------------------
 _start:
-    // ---------- 1. Abrir lecturas.csv ----------------------
+    // 1. Abrir lecturas.csv
     mov  x8,  SYS_OPENAT
     mov  x0,  AT_FDCWD
     adr  x1,  archivo_entrada
     mov  x2,  O_RDONLY
     mov  x3,  0
     svc  0
-    // Si x0 < 0 hubo error
     cmp  x0,  0
     blt  salir_error
-    mov  x19, x0                // x19 = fd del CSV
+    mov  x19, x0            // x19 = fd del CSV
 
-    // ---------- 2. Leer todo el archivo --------------------
+    // 2. Leer todo el archivo
     mov  x8,  SYS_READ
     mov  x0,  x19
-    adr  x1,  buf_lectura
+    adr  x1,  buf_csv
     mov  x2,  4096
     svc  0
-    // Guardar cuantos bytes leyo
     adr  x9,  bytes_leidos
     str  x0,  [x9]
 
-    // ---------- 3. Cerrar el archivo -----------------------
+    // 3. Cerrar CSV
     mov  x8,  SYS_CLOSE
     mov  x0,  x19
     svc  0
 
-    // ---------- 4. Parsear CSV -> arr_datos[] --------------
-    bl   subr_parsear_csv
+    // 4. Parsear columna HUM_SUELO_1 -> arr_suelo1
+    adr  x0,  arr_suelo1
+    mov  x1,  COL_SUELO_1
+    bl   subr_parsear_columna
 
-    // ---------- 5. Calcular tendencia ----------------------
+    // 5. Parsear columna HUM_SUELO_2 -> arr_suelo2
+    adr  x0,  arr_suelo2
+    mov  x1,  COL_SUELO_2
+    bl   subr_parsear_columna
+
+    // 6. Calcular tendencia HUM_SUELO_1
+    adr  x0,  arr_suelo1
+    adr  x1,  s1_increments
     bl   subr_calcular_tendencia
 
-    // ---------- 6. Escribir resultado ----------------------
+    // 7. Calcular tendencia HUM_SUELO_2
+    adr  x0,  arr_suelo2
+    adr  x1,  s2_increments
+    bl   subr_calcular_tendencia
+
+    // 8. Escribir resultado
     bl   subr_escribir_resultado
 
-    // ---------- 7. Salir OK --------------------------------
+    // 9. Salir OK
     mov  x8,  SYS_EXIT
     mov  x0,  0
     svc  0
@@ -168,136 +200,126 @@ salir_error:
 
 
 // ===========================================================
-// SUBRUTINA: subr_parsear_csv
+// SUBRUTINA: subr_parsear_columna
 //
-// Recorre buf_lectura caracter por caracter.
-// Salta la primera linea (cabecera).
-// En cada fila, cuenta columnas separadas por coma.
-// Cuando llega a la columna COL_OBJETIVO (3 = HUM_SUELO_1),
-// convierte el texto ASCII a entero y lo guarda en arr_datos.
-// Para cuando llega a 30 datos o encuentra '$'.
+// Lee buf_csv y extrae la columna indicada en los 30 datos.
 //
-// Registros utilizados:
-//   x19 = puntero actual dentro de buf_lectura
-//   x20 = puntero al final del buffer (inicio + bytes_leidos)
-//   x21 = indice de fila actual (0..29)
-//   x22 = columna actual dentro de la fila
-//   x23 = acumulador del numero que se esta leyendo
-//   x24 = puntero base de arr_datos
-//   x25 = byte leido (temporal)
+// Parametros:
+//   x0 = puntero al array destino (arr_suelo1 o arr_suelo2)
+//   x1 = numero de columna a extraer
+//
+// Registros:
+//   x19 = puntero actual en buf_csv
+//   x20 = puntero fin del buffer
+//   x21 = indice de fila (0..29)
+//   x22 = columna actual
+//   x23 = acumulador del numero
+//   x24 = array destino
+//   x25 = columna objetivo
+//   x26 = byte leido
 // ===========================================================
-subr_parsear_csv:
-    // Guardar registros en el stack
+subr_parsear_columna:
     stp  x29, x30, [sp, #-80]!
+    mov  x29, sp
     stp  x19, x20, [sp, #16]
     stp  x21, x22, [sp, #32]
     stp  x23, x24, [sp, #48]
     stp  x25, x26, [sp, #64]
-    mov  x29, sp
 
-    // Inicializar punteros
-    adr  x19, buf_lectura
+    mov  x24, x0            // array destino
+    mov  x25, x1            // columna objetivo
+
+    adr  x19, buf_csv
     adr  x9,  bytes_leidos
     ldr  x9,  [x9]
-    add  x20, x19, x9           // x20 = fin del buffer
+    add  x20, x19, x9       // fin del buffer
 
-    adr  x24, arr_datos         // base del array de resultados
-    mov  x21, 0                 // indice de fila = 0
+    mov  x21, 0             // indice fila = 0
 
-    // ---- Saltar cabecera (primera linea hasta \n) ----------
-pcsv_skip_header:
+    // Saltar cabecera
+spc_skip_header:
     cmp  x19, x20
-    bge  pcsv_fin
-    ldrb w25, [x19], #1         // leer byte y avanzar puntero
-    cmp  w25, '\n'
-    bne  pcsv_skip_header
-    // Aqui x19 apunta al inicio de la primera fila de datos
+    bge  spc_fin
+    ldrb w26, [x19], #1
+    cmp  w26, '\n'
+    bne  spc_skip_header
 
-    // ---- Loop principal: procesar cada fila ----------------
-pcsv_fila:
-    // Condicion de parada: 30 datos o fin de buffer
+spc_fila:
     cmp  x21, N_DATOS
-    bge  pcsv_fin
+    bge  spc_fin
     cmp  x19, x20
-    bge  pcsv_fin
+    bge  spc_fin
 
-    // Verificar marcador de fin '$'
-    ldrb w25, [x19]
-    cmp  w25, '$'
-    beq  pcsv_fin
+    // Verificar '$'
+    ldrb w26, [x19]
+    cmp  w26, '$'
+    beq  spc_fin
 
-    // Resetear estado para nueva fila
-    mov  x22, 0                 // columna = 0
-    mov  x23, 0                 // acumulador = 0
+    mov  x22, 0             // columna actual = 0
+    mov  x23, 0             // acumulador = 0
 
-    // ---- Loop interno: leer columnas de la fila ------------
-pcsv_columna:
+spc_columna:
     cmp  x19, x20
-    bge  pcsv_fin
+    bge  spc_fin
 
-    ldrb w25, [x19], #1         // leer siguiente byte
+    ldrb w26, [x19], #1
 
-    // --- Ignorar retorno de carro \r ---
-    cmp  w25, '\r'
-    beq  pcsv_columna
+    // Ignorar \r
+    cmp  w26, '\r'
+    beq  spc_columna
 
-    // --- Fin de linea \n ---
-    cmp  w25, '\n'
-    beq  pcsv_fin_linea
+    // Fin de linea
+    cmp  w26, '\n'
+    beq  spc_fin_linea
 
-    // --- Separador de columna , ---
-    cmp  w25, ','
-    beq  pcsv_separador
+    // Separador de columna
+    cmp  w26, ','
+    beq  spc_separador
 
-    // --- Es un digito ASCII ---
-    // Verificar que sea '0'..'9'
-    cmp  w25, '0'
-    blt  pcsv_columna
-    cmp  w25, '9'
-    bgt  pcsv_columna
+    // Digito '0'..'9'
+    cmp  w26, '0'
+    blt  spc_columna
+    cmp  w26, '9'
+    bgt  spc_columna
 
-    // acum = acum * 10 + (digito - '0')
+    // acum = acum * 10 + digito
     mov  x9,  10
     mul  x23, x23, x9
-    sub  w25, w25, '0'
-    add  x23, x23, x25
-    b    pcsv_columna
+    sub  w26, w26, '0'
+    add  x23, x23, x26
+    b    spc_columna
 
-    // --- Encontramos separador , ---
-pcsv_separador:
-    // Si esta columna es la que buscamos, guardar y saltar resto
-    cmp  x22, COL_OBJETIVO
-    beq  pcsv_guardar_valor
-
-    // Si no, pasar a la siguiente columna
+spc_separador:
+    cmp  x22, x25
+    beq  spc_guardar        // era la columna objetivo
     add  x22, x22, 1
-    mov  x23, 0                 // resetear acumulador
-    b    pcsv_columna
+    mov  x23, 0             // resetear acumulador
+    b    spc_columna
 
-    // --- Fin de linea: si la columna objetivo era la ultima --
-pcsv_fin_linea:
-    cmp  x22, COL_OBJETIVO
-    beq  pcsv_guardar_valor
-    // Si no encontramos el valor en esta fila, igual avanzar
+spc_fin_linea:
+    cmp  x22, x25
+    beq  spc_guardar_avanzar
     add  x21, x21, 1
-    b    pcsv_fila
+    b    spc_fila
 
-    // --- Guardar valor en arr_datos[x21] ---
-pcsv_guardar_valor:
-    str  x23, [x24, x21, lsl #3]    // arr_datos[i] = acum
+spc_guardar:
+    str  x23, [x24, x21, lsl #3]
     add  x21, x21, 1
-
-    // Saltar el resto de la fila hasta \n
-pcsv_skip_resto_fila:
+    // Saltar resto de la fila
+spc_skip_resto:
     cmp  x19, x20
-    bge  pcsv_fin
-    ldrb w25, [x19], #1
-    cmp  w25, '\n'
-    bne  pcsv_skip_resto_fila
-    b    pcsv_fila
+    bge  spc_fin
+    ldrb w26, [x19], #1
+    cmp  w26, '\n'
+    bne  spc_skip_resto
+    b    spc_fila
 
-pcsv_fin:
-    // Restaurar registros
+spc_guardar_avanzar:
+    str  x23, [x24, x21, lsl #3]
+    add  x21, x21, 1
+    b    spc_fila
+
+spc_fin:
     ldp  x25, x26, [sp, #64]
     ldp  x23, x24, [sp, #48]
     ldp  x21, x22, [sp, #32]
@@ -309,148 +331,121 @@ pcsv_fin:
 // ===========================================================
 // SUBRUTINA: subr_calcular_tendencia
 //
-// Recorre arr_datos[0..29] comparando cada dato con el anterior.
-// Calcula:
-//   - INCREMENTS    : cantidad de veces que dato[i] > dato[i-1]
-//   - DECREMENTS    : cantidad de veces que dato[i] < dato[i-1]
-//   - MAX_UP_STREAK : racha mas larga de incrementos consecutivos
-//   - MAX_DOWN_STREAK: racha mas larga de decrementos consecutivos
-//   - ACCUM_DIFF    : suma de (dato[i] - dato[i-1]) para i=1..29
+// Calcula tendencia sobre un array de 30 datos.
 //
-// Formulas del proyecto:
-//   DIF_i    = X_i - X_(i-1)
-//   DIF_ACUM = suma de todos los DIF_i
-//   DIF_ACUM > 0  -> TREND = UP
-//   DIF_ACUM < 0  -> TREND = DOWN
-//   DIF_ACUM = 0  -> TREND = STABLE
+// Parametros:
+//   x0 = puntero al array de datos (arr_suelo1 o arr_suelo2)
+//   x1 = puntero al bloque de resultados (s1_* o s2_*)
+//        El bloque tiene 5 campos x 8 bytes en orden:
+//        [0]=increments [1]=decrements [2]=max_up
+//        [3]=max_down   [4]=accum_diff
 //
-// Registros utilizados:
-//   x19 = puntero base de arr_datos
-//   x20 = indice i (1 .. 29)
-//   x21 = contador de incrementos
-//   x22 = contador de decrementos
-//   x23 = racha de incrementos actual
-//   x24 = racha de decrementos actual
-//   x25 = max racha incrementos (MAX_UP_STREAK)
-//   x26 = max racha decrementos (MAX_DOWN_STREAK)
-//   x27 = diferencia acumulada   (ACCUM_DIFF)
-//   x9  = dato[i]
-//   x10 = dato[i-1]
-//   x11 = diferencia actual DIF_i
+// Registros:
+//   x19 = puntero al array de datos
+//   x20 = puntero al bloque de resultados
+//   x21 = indice i
+//   x22 = incrementos
+//   x23 = decrementos
+//   x24 = racha_up actual
+//   x25 = racha_down actual
+//   x26 = max_up
+//   x27 = max_down
+//   x28 = accum_diff
 // ===========================================================
 subr_calcular_tendencia:
-    stp  x29, x30, [sp, #-80]!
+    stp  x29, x30, [sp, #-96]!
+    mov  x29, sp
     stp  x19, x20, [sp, #16]
     stp  x21, x22, [sp, #32]
     stp  x23, x24, [sp, #48]
     stp  x25, x26, [sp, #64]
-    mov  x29, sp
+    stp  x27, x28, [sp, #80]
 
-    adr  x19, arr_datos
+    mov  x19, x0            // array de datos
+    mov  x20, x1            // bloque de resultados
 
-    // Inicializar todos los contadores en 0
-    mov  x20, 1                 // i = 1 (comparamos i con i-1)
-    mov  x21, 0                 // incrementos = 0
-    mov  x22, 0                 // decrementos = 0
-    mov  x23, 0                 // racha_up_actual = 0
-    mov  x24, 0                 // racha_down_actual = 0
-    mov  x25, 0                 // max_up = 0
-    mov  x26, 0                 // max_down = 0
-    mov  x27, 0                 // accum_diff = 0
+    mov  x21, 1             // i = 1
+    mov  x22, 0             // incrementos
+    mov  x23, 0             // decrementos
+    mov  x24, 0             // racha_up actual
+    mov  x25, 0             // racha_down actual
+    mov  x26, 0             // max_up
+    mov  x27, 0             // max_down
+    mov  x28, 0             // accum_diff
 
-calc_loop:
-    // Condicion de parada: i == 30
-    cmp  x20, N_DATOS
-    bge  calc_fin
+sct_loop:
+    cmp  x21, N_DATOS
+    bge  sct_fin
 
-    // Cargar dato[i-1] y dato[i]
-    sub  x9,  x20, 1
-    ldr  x10, [x19, x9,  lsl #3]   // x10 = dato[i-1]
-    ldr  x9,  [x19, x20, lsl #3]   // x9  = dato[i]
+    // dato[i-1]
+    sub  x9,  x21, 1
+    ldr  x10, [x19, x9,  lsl #3]
+    // dato[i]
+    ldr  x9,  [x19, x21, lsl #3]
 
     // DIF_i = dato[i] - dato[i-1]
     sub  x11, x9, x10
+    add  x28, x28, x11      // accum_diff += DIF_i
 
-    // ACCUM_DIFF += DIF_i
-    add  x27, x27, x11
-
-    // Clasificar DIF_i
     cmp  x11, 0
-    bgt  calc_es_incremento
-    blt  calc_es_decremento
+    bgt  sct_incremento
+    blt  sct_decremento
 
-    // --- DIF_i == 0 : igual, resetear ambas rachas ----------
-    mov  x23, 0
+    // Igual: resetear rachas
     mov  x24, 0
-    b    calc_siguiente
+    mov  x25, 0
+    b    sct_siguiente
 
-    // --- DIF_i > 0 : incremento ----------------------------
-calc_es_incremento:
-    add  x21, x21, 1            // incrementos++
-    add  x23, x23, 1            // racha_up++
-    mov  x24, 0                 // resetear racha_down
-
-    // Actualizar MAX_UP_STREAK si racha_up > max_up
-    cmp  x23, x25
-    ble  calc_siguiente
-    mov  x25, x23               // max_up = racha_up
-    b    calc_siguiente
-
-    // --- DIF_i < 0 : decremento ----------------------------
-calc_es_decremento:
-    add  x22, x22, 1            // decrementos++
-    add  x24, x24, 1            // racha_down++
-    mov  x23, 0                 // resetear racha_up
-
-    // Actualizar MAX_DOWN_STREAK si racha_down > max_down
+sct_incremento:
+    add  x22, x22, 1        // incrementos++
+    add  x24, x24, 1        // racha_up++
+    mov  x25, 0             // resetear racha_down
     cmp  x24, x26
-    ble  calc_siguiente
-    mov  x26, x24               // max_down = racha_down
+    ble  sct_siguiente
+    mov  x26, x24           // actualizar max_up
+    b    sct_siguiente
 
-calc_siguiente:
-    add  x20, x20, 1            // i++
-    b    calc_loop
+sct_decremento:
+    add  x23, x23, 1        // decrementos++
+    add  x25, x25, 1        // racha_down++
+    mov  x24, 0             // resetear racha_up
+    cmp  x25, x27
+    ble  sct_siguiente
+    mov  x27, x25           // actualizar max_down
 
-calc_fin:
-    // Guardar resultados en memoria BSS
-    adr  x9, res_increments
-    str  x21, [x9]
+sct_siguiente:
+    add  x21, x21, 1
+    b    sct_loop
 
-    adr  x9, res_decrements
-    str  x22, [x9]
+sct_fin:
+    // Guardar resultados en el bloque
+    str  x22, [x20, #0]     // increments
+    str  x23, [x20, #8]     // decrements
+    str  x26, [x20, #16]    // max_up
+    str  x27, [x20, #24]    // max_down
+    str  x28, [x20, #32]    // accum_diff
 
-    adr  x9, res_max_up
-    str  x25, [x9]
-
-    adr  x9, res_max_down
-    str  x26, [x9]
-
-    adr  x9, res_accum_diff
-    str  x27, [x9]
-
+    ldp  x27, x28, [sp, #80]
     ldp  x25, x26, [sp, #64]
     ldp  x23, x24, [sp, #48]
     ldp  x21, x22, [sp, #32]
     ldp  x19, x20, [sp, #16]
-    ldp  x29, x30, [sp], #80
+    ldp  x29, x30, [sp], #96
     ret
 
 
 // ===========================================================
 // SUBRUTINA: subr_escribir_resultado
 //
-// Crea resultado_tendencia.txt y escribe todas las lineas
-// con el formato exacto requerido por el proyecto.
-//
-// Registros utilizados:
-//   x19 = fd del archivo de salida
+// Crea resultado_tendencia.txt y escribe los resultados
+// de HUM_SUELO_1 y HUM_SUELO_2.
 // ===========================================================
 subr_escribir_resultado:
     stp  x29, x30, [sp, #-32]!
     stp  x19, x20, [sp, #16]
     mov  x29, sp
 
-    // Crear/abrir archivo de salida
+    // Abrir archivo de salida
     mov  x8,  SYS_OPENAT
     mov  x0,  AT_FDCWD
     adr  x1,  archivo_salida
@@ -458,207 +453,202 @@ subr_escribir_resultado:
     mov  x3,  PERM_644
     svc  0
     cmp  x0,  0
-    blt  er_fin
-    mov  x19, x0                // x19 = fd de salida
+    blt  ser_fin
+    mov  x19, x0            // x19 = fd salida
 
-    // --- Linea 1: MODULE=ADVANCED_TREND --------------------
-    adr  x0, str_module
-    mov  x1, str_module_len
-    bl   subr_escribir_buf
+    // MODULE=ADVANCED_TREND
+    adr  x0,  str_module
+    mov  x1,  str_module_len
+    bl   ser_write
 
-    // --- Linea 2: TOTAL_VALUES=30 --------------------------
-    adr  x0, str_total
-    mov  x1, str_total_len
-    bl   subr_escribir_buf
+    // TOTAL_VALUES=30
+    adr  x0,  str_total
+    mov  x1,  str_total_len
+    bl   ser_write
 
-    // --- Linea 3: INCREMENTS=<valor> -----------------------
-    adr  x0, str_inc_label
-    mov  x1, str_inc_label_len
-    bl   subr_escribir_buf
-    adr  x9, res_increments
-    ldr  x0, [x9]
-    bl   subr_escribir_entero_nl
+    // ---- Seccion HUM_SUELO_1 ------------------------------
+    adr  x0,  str_area1
+    mov  x1,  str_area1_len
+    bl   ser_write
 
-    // --- Linea 4: DECREMENTS=<valor> -----------------------
-    adr  x0, str_dec_label
-    mov  x1, str_dec_label_len
-    bl   subr_escribir_buf
-    adr  x9, res_decrements
-    ldr  x0, [x9]
-    bl   subr_escribir_entero_nl
+    adr  x20, s1_increments
+    bl   ser_escribir_bloque
 
-    // --- Linea 5: MAX_UP_STREAK=<valor> --------------------
-    adr  x0, str_mup_label
-    mov  x1, str_mup_label_len
-    bl   subr_escribir_buf
-    adr  x9, res_max_up
-    ldr  x0, [x9]
-    bl   subr_escribir_entero_nl
+    // Separador
+    adr  x0,  str_sep
+    mov  x1,  str_sep_len
+    bl   ser_write
 
-    // --- Linea 6: MAX_DOWN_STREAK=<valor> ------------------
-    adr  x0, str_mdn_label
-    mov  x1, str_mdn_label_len
-    bl   subr_escribir_buf
-    adr  x9, res_max_down
-    ldr  x0, [x9]
-    bl   subr_escribir_entero_nl
+    // ---- Seccion HUM_SUELO_2 ------------------------------
+    adr  x0,  str_area2
+    mov  x1,  str_area2_len
+    bl   ser_write
 
-    // --- Linea 7: ACCUM_DIFF=<valor> (puede ser negativo) --
-    adr  x0, str_acc_label
-    mov  x1, str_acc_label_len
-    bl   subr_escribir_buf
-    adr  x9, res_accum_diff
-    ldr  x0, [x9]
-    bl   subr_escribir_entero_con_signo_nl
+    adr  x20, s2_increments
+    bl   ser_escribir_bloque
 
-    // --- Linea 8: TREND=UP / DOWN / STABLE -----------------
-    adr  x9, res_accum_diff
-    ldr  x0, [x9]
-    cmp  x0, 0
-    bgt  er_trend_up
-    blt  er_trend_down
-
-    // STABLE
-    adr  x0, str_trend_stable
-    mov  x1, str_trend_stable_len
-    bl   subr_escribir_buf
-    b    er_cerrar
-
-er_trend_up:
-    adr  x0, str_trend_up
-    mov  x1, str_trend_up_len
-    bl   subr_escribir_buf
-    b    er_cerrar
-
-er_trend_down:
-    adr  x0, str_trend_down
-    mov  x1, str_trend_down_len
-    bl   subr_escribir_buf
-
-er_cerrar:
-    mov  x8, SYS_CLOSE
-    mov  x0, x19
+    // Cerrar archivo
+    mov  x8,  SYS_CLOSE
+    mov  x0,  x19
     svc  0
 
-er_fin:
+ser_fin:
     ldp  x19, x20, [sp, #16]
     ldp  x29, x30, [sp], #32
     ret
 
 
 // ===========================================================
-// SUBRUTINA: subr_escribir_buf
-// Escribe x1 bytes desde la direccion x0 al fd x19.
+// SUBRUTINA INTERNA: ser_escribir_bloque
+// Escribe los 5 campos de un bloque de resultados.
+// x20 = puntero al bloque (increments, decrements, max_up,
+//        max_down, accum_diff)
+// x19 = fd salida (ya abierto)
 // ===========================================================
-subr_escribir_buf:
+ser_escribir_bloque:
     stp  x29, x30, [sp, #-16]!
     mov  x29, sp
 
-    mov  x8,  SYS_WRITE
-    mov  x2,  x1                // longitud
-    mov  x1,  x0                // buffer
-    mov  x0,  x19               // fd
-    svc  0
+    // INCREMENTS=
+    adr  x0,  str_inc_lbl
+    mov  x1,  str_inc_lbl_len
+    bl   ser_write
+    ldr  x0,  [x20, #0]
+    bl   ser_escribir_uint_nl
 
+    // DECREMENTS=
+    adr  x0,  str_dec_lbl
+    mov  x1,  str_dec_lbl_len
+    bl   ser_write
+    ldr  x0,  [x20, #8]
+    bl   ser_escribir_uint_nl
+
+    // MAX_UP_STREAK=
+    adr  x0,  str_mup_lbl
+    mov  x1,  str_mup_lbl_len
+    bl   ser_write
+    ldr  x0,  [x20, #16]
+    bl   ser_escribir_uint_nl
+
+    // MAX_DOWN_STREAK=
+    adr  x0,  str_mdn_lbl
+    mov  x1,  str_mdn_lbl_len
+    bl   ser_write
+    ldr  x0,  [x20, #24]
+    bl   ser_escribir_uint_nl
+
+    // ACCUM_DIFF= (puede ser negativo)
+    adr  x0,  str_acc_lbl
+    mov  x1,  str_acc_lbl_len
+    bl   ser_write
+    ldr  x0,  [x20, #32]
+    bl   ser_escribir_int_nl
+
+    // TREND=
+    ldr  x0,  [x20, #32]
+    cmp  x0,  0
+    bgt  seb_up
+    blt  seb_down
+    adr  x0,  str_trend_stable
+    mov  x1,  str_trend_stable_len
+    bl   ser_write
+    b    seb_fin
+seb_up:
+    adr  x0,  str_trend_up
+    mov  x1,  str_trend_up_len
+    bl   ser_write
+    b    seb_fin
+seb_down:
+    adr  x0,  str_trend_down
+    mov  x1,  str_trend_down_len
+    bl   ser_write
+seb_fin:
     ldp  x29, x30, [sp], #16
     ret
 
 
 // ===========================================================
-// SUBRUTINA: subr_escribir_entero_nl
-//
-// Convierte el entero en x0 (sin signo) a ASCII y lo escribe
-// al archivo seguido de '\n'.
-//
-// Algoritmo: division sucesiva por 10, los digitos salen
-// en orden inverso, los ponemos al final del buffer y
-// escribimos desde el primero hacia atras.
-//
-// Registros:
-//   x0  = valor a convertir (entrada)
-//   x9  = base del buffer buf_conv
-//   x10 = cursor (avanza hacia atras desde el final)
-//   x11 = cociente temporal
-//   x12 = resto (digito actual)
+// ser_write - escribe x1 bytes desde x0 al fd x19
 // ===========================================================
-subr_escribir_entero_nl:
+ser_write:
+    stp  x29, x30, [sp, #-16]!
+    mov  x29, sp
+    mov  x8,  SYS_WRITE
+    mov  x2,  x1
+    mov  x1,  x0
+    mov  x0,  x19
+    svc  0
+    ldp  x29, x30, [sp], #16
+    ret
+
+
+// ===========================================================
+// ser_escribir_uint_nl
+// Convierte x0 (entero sin signo) a ASCII y escribe + '\n'
+// ===========================================================
+ser_escribir_uint_nl:
     stp  x29, x30, [sp, #-16]!
     mov  x29, sp
 
     adr  x9,  buf_conv
-    add  x10, x9, #28           // cursor empieza al final
+    add  x10, x9, #28       // cursor al final
+    mov  w11, '\n'
+    strb w11, [x10]         // poner \n al final
 
-    // Escribir '\n' en la ultima posicion
-    mov  w12, '\n'
-    strb w12, [x10]
-
-    // Caso especial: valor == 0
-    cbnz x0, sein_loop
-    mov  w12, '0'
+    cbnz x0,  seun_loop
+    mov  w11, '0'
     sub  x10, x10, #1
-    strb w12, [x10]
-    b    sein_escribir
+    strb w11, [x10]
+    b    seun_write
 
-sein_loop:
-    cbz  x0, sein_escribir
-
-    mov  x11, 10
-    udiv x12, x0, x11           // cociente = valor / 10
-    msub x12, x12, x11, x0     // resto    = valor - cociente*10
-    add  w12, w12, '0'          // convertir a ASCII
+seun_loop:
+    cbz  x0,  seun_write
+    mov  x12, 10
+    udiv x13, x0, x12
+    msub x13, x13, x12, x0
+    add  w13, w13, '0'
     sub  x10, x10, #1
-    strb w12, [x10]             // guardar digito
-    udiv x0,  x0, x11           // valor = cociente
-    b    sein_loop
+    strb w13, [x10]
+    udiv x0,  x0, x12
+    b    seun_loop
 
-sein_escribir:
-    // Calcular longitud: desde x10 hasta x9+28 inclusive + \n
-    adr  x9, buf_conv
-    add  x9, x9, #28
-    sub  x1, x9, x10
-    add  x1, x1, #1             // +1 por el \n
-    mov  x0, x10
-    bl   subr_escribir_buf
+seun_write:
+    adr  x9,  buf_conv
+    add  x9,  x9, #28
+    sub  x1,  x9, x10
+    add  x1,  x1, #1        // +1 por el \n
+    mov  x0,  x10
+    bl   ser_write
 
     ldp  x29, x30, [sp], #16
     ret
 
 
 // ===========================================================
-// SUBRUTINA: subr_escribir_entero_con_signo_nl
-//
-// Igual que subr_escribir_entero_nl pero si x0 es negativo
-// escribe el signo '-' antes de los digitos.
+// ser_escribir_int_nl
+// Igual que ser_escribir_uint_nl pero maneja negativos.
 // ===========================================================
-subr_escribir_entero_con_signo_nl:
+ser_escribir_int_nl:
     stp  x29, x30, [sp, #-32]!
     stp  x19, x20, [sp, #16]
     mov  x29, sp
 
-    // ¿Es negativo?
-    cmp  x0, 0
-    bge  secsn_positivo
+    cmp  x0,  0
+    bge  sein_positivo
 
-    // Guardar valor absoluto
-    neg  x20, x0                // x20 = abs(valor)
-
-    // Escribir el signo '-'
+    // Escribir '-'
+    mov  x20, x0
+    neg  x20, x20           // valor absoluto
     mov  x8,  SYS_WRITE
     mov  x0,  x19
     adr  x1,  str_minus
     mov  x2,  1
     svc  0
-
-    // Escribir el valor absoluto + \n
     mov  x0,  x20
-    bl   subr_escribir_entero_nl
-    b    secsn_fin
 
-secsn_positivo:
-    // Solo escribir el valor + \n
-    bl   subr_escribir_entero_nl
+sein_positivo:
+    bl   ser_escribir_uint_nl
 
-secsn_fin:
     ldp  x19, x20, [sp, #16]
     ldp  x29, x30, [sp], #32
     ret

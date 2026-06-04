@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Invernadero Inteligente loT</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -140,6 +141,39 @@
                             <div class="arm64-value" id="tendencia">Tendencia: UP (↑)</div>
                             <div class="arm64-detail">18 incrementos, racha maxima: 5</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GRAFICAS HISTORICAS -->
+        <section class="section">
+            <div class="card">
+                <h3>Graficas Historicas (ultimos 30 registros)</h3>
+                <div class="grid-2">
+                    <div>
+                        <canvas id="graficoTemperatura" height="200"></canvas>
+                        <p class="grafica-label">Temperatura (°C)</p>
+                    </div>
+                    <div>
+                        <canvas id="graficoHumedad" height="200"></canvas>
+                        <p class="grafica-label">Humedad Ambiente (%)</p>
+                    </div>
+                    <div>
+                        <canvas id="graficoHumedadSuelo1" height="200"></canvas>
+                        <p class="grafica-label">Humedad Suelo Area 1 (%)</p>
+                    </div>
+                    <div>
+                        <canvas id="graficoHumedadSuelo2" height="200"></canvas>
+                        <p class="grafica-label">Humedad Suelo Area 2 (%)</p>
+                    </div>
+                    <div>
+                        <canvas id="graficoLuz" height="200"></canvas>
+                        <p class="grafica-label">Nivel de Luz</p>
+                    </div>
+                    <div>
+                        <canvas id="graficoGas" height="200"></canvas>
+                        <p class="grafica-label">Nivel de Gas (ppm)</p>
                     </div>
                 </div>
             </div>

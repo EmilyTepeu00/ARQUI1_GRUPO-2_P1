@@ -339,3 +339,11 @@ body {
         font-size: 1.5rem;
     }
 }
+
+/* ----- GRAFICAS ----- */
+.grafica-label {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--gray-600);
+    margin-top: 8px;
+}

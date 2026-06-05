@@ -74,9 +74,9 @@ newline_len = . - newline
 _start:
 
     // ----------------------------------------------------------
-    // PASO 1: Leer los 30 datos de TEMP (columna 1) desde CSV
+    // PASO 1: Leer los 30 datos de HUM_AIRE (columna 2) desde CSV
     // ----------------------------------------------------------
-    mov x0, #1              // columna 1 = TEMP
+    mov x0, #2              // columna 1 = HUM_AIRE
     bl leer_datos           // después de esto, 'datos' tiene los 30 valores
     // x0 ahora tiene cuántos datos se leyeron (debe ser 30)
 

@@ -1,0 +1,6 @@
+paho-mqtt==1.6.1
+
+# Solo en Raspberry Pi real (comentar en PC):
+# RPi.GPIO
+# Adafruit_DHT
+# smbus2

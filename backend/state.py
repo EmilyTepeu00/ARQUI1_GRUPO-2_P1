@@ -1,13 +1,8 @@
-# ============================================================
-# state.py - Estado global del invernadero y logica de control
-# ============================================================
-
 import threading
 from datetime import datetime
 import config
 import database as db
 
-# ---- Estado interno del sistema ----------------------------
 estado_sistema = {
     "global":     "NORMAL",
     "riego":      "RIEGO_OFF",
@@ -21,35 +16,27 @@ estado_sistema = {
 _lock = threading.Lock()
 
 
-# ---- Clasificacion de sensores -----------------------------
-
-def clasificar_suelo(valor: int) -> str:
+def clasificar_suelo(valor):
     if valor < config.UMBRAL_HUMEDAD_BAJA:
         return "SECO"
     elif valor <= config.UMBRAL_HUMEDAD_NORMAL:
         return "NORMAL"
-    else:
-        return "SATURADO"
+    return "SATURADO"
 
 
-def clasificar_gas(valor: int) -> str:
+def clasificar_gas(valor):
     if valor >= config.UMBRAL_GAS_EMERGENCIA:
         return "GAS_EMERGENCIA"
     elif valor >= config.UMBRAL_GAS_ADVERTENCIA:
         return "GAS_ADVERTENCIA"
-    else:
-        return "GAS_NORMAL"
+    return "GAS_NORMAL"
 
-
-# ---- Logica de control automatico -------------------------
 
 def evaluar_estado_global(temp, hum_suelo1, hum_suelo2):
     with _lock:
         if estado_sistema["gas"] == "GAS_EMERGENCIA":
             return "EMERGENCIA"
-        riego_activo = estado_sistema["riego"] not in (
-            "RIEGO_OFF", "BLOQUEADO_POR_SATURACION"
-        )
+        riego_activo = estado_sistema["riego"] not in ("RIEGO_OFF", "BLOQUEADO_POR_SATURACION")
         if riego_activo:
             return "RIEGO_ACTIVO"
         if estado_sistema["modo"] == "MANUAL":
@@ -61,13 +48,12 @@ def evaluar_estado_global(temp, hum_suelo1, hum_suelo2):
     return "NORMAL"
 
 
-def decidir_riego(hum_suelo1: int, hum_suelo2: int):
+def decidir_riego(hum_suelo1, hum_suelo2):
     with _lock:
         if estado_sistema["modo"] == "MANUAL":
             return
         estado1 = clasificar_suelo(hum_suelo1)
         estado2 = clasificar_suelo(hum_suelo2)
-
         if estado1 == "SATURADO" or estado2 == "SATURADO":
             estado_sistema["riego"] = "BLOQUEADO_POR_SATURACION"
         elif estado1 == "SECO":
@@ -78,7 +64,7 @@ def decidir_riego(hum_suelo1: int, hum_suelo2: int):
             estado_sistema["riego"] = "RIEGO_OFF"
 
 
-def decidir_ventilador(temp: float):
+def decidir_ventilador(temp):
     with _lock:
         if estado_sistema["gas"] in ("GAS_ADVERTENCIA", "GAS_EMERGENCIA"):
             estado_sistema["ventilador"] = "VENTILACION_EMERGENCIA"
@@ -88,7 +74,7 @@ def decidir_ventilador(temp: float):
             estado_sistema["ventilador"] = "VENTILACION_OFF"
 
 
-def decidir_luces(luz: int):
+def decidir_luces(luz):
     with _lock:
         if estado_sistema["modo"] == "MANUAL":
             return
@@ -101,11 +87,7 @@ def decidir_alarma():
             estado_sistema["alarma"] = "ON"
 
 
-def aplicar_logica_automatica(lecturas: dict):
-    """
-    Aplica todas las reglas de control automatico
-    sobre las lecturas actuales.
-    """
+def aplicar_logica_automatica(lecturas):
     with _lock:
         estado_sistema["gas"] = clasificar_gas(lecturas["gas"])
 
@@ -116,9 +98,7 @@ def aplicar_logica_automatica(lecturas: dict):
         decidir_alarma()
 
     nuevo_global = evaluar_estado_global(
-        lecturas["temperatura"],
-        lecturas["hum_suelo1"],
-        lecturas["hum_suelo2"]
+        lecturas["temperatura"], lecturas["hum_suelo1"], lecturas["hum_suelo2"]
     )
     with _lock:
         estado_sistema["global"] = nuevo_global
@@ -126,55 +106,42 @@ def aplicar_logica_automatica(lecturas: dict):
     db.actualizar_estado_global(estado_sistema.copy())
 
 
-# ---- Procesar comandos remotos ----------------------------
-
-def procesar_comando(payload: dict, origen: str = "REMOTO"):
-    """
-    Procesa un comando recibido via MQTT o HTTP.
-    Actualiza el estado del sistema y guarda en MongoDB.
-    """
+def procesar_comando(payload, origen="REMOTO"):
     accion = payload.get("accion", "").upper()
     valor  = payload.get("valor",  "").upper()
     ts     = datetime.now().isoformat()
 
-    print(f"[CMD] Accion={accion} | Valor={valor} | Origen={origen}")
+    print(f"[CMD] {accion}={valor} | origen={origen}")
 
     doc_cmd = {
-        "accion":       accion,
-        "valor":        valor,
-        "origen":       origen,
-        "timestamp":    ts,
+        "accion":        accion,
+        "valor":         valor,
+        "origen":        origen,
+        "timestamp":     ts,
         "estado_previo": estado_sistema.copy()
     }
 
     with _lock:
         if accion == "RIEGO_AREA1":
             estado_sistema["riego"] = "RIEGO_AREA_1" if valor == "ON" else "RIEGO_OFF"
-
         elif accion == "RIEGO_AREA2":
             estado_sistema["riego"] = "RIEGO_AREA_2" if valor == "ON" else "RIEGO_OFF"
-
         elif accion == "VENTILADOR":
             estado_sistema["ventilador"] = "VENTILACION_MANUAL" if valor == "ON" else "VENTILACION_OFF"
             if valor == "ON":
                 estado_sistema["modo"] = "MANUAL"
-
         elif accion == "LUCES":
             estado_sistema["luces"] = valor
             estado_sistema["modo"]  = "MANUAL"
-
         elif accion == "ALARMA" and valor == "OFF":
             estado_sistema["alarma"] = "OFF"
-
         elif accion == "MODO":
             if valor in ("AUTOMATICO", "MANUAL"):
                 estado_sistema["modo"] = valor
-
         elif accion == "RESET":
             estado_sistema["global"]  = "NORMAL"
             estado_sistema["alarma"]  = "OFF"
             estado_sistema["modo"]    = "AUTOMATICO"
-
         else:
             print(f"[CMD] Accion desconocida: {accion}")
 
@@ -184,6 +151,6 @@ def procesar_comando(payload: dict, origen: str = "REMOTO"):
     db.actualizar_estado_global(estado_sistema.copy())
 
 
-def obtener_estado() -> dict:
+def obtener_estado():
     with _lock:
         return estado_sistema.copy()

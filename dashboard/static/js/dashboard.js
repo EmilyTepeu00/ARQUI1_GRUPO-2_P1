@@ -1,5 +1,5 @@
 // CONFIGURACION
-const API_URL = "/api/datos";
+const API_URL = "/api/estado";
 const API_COMANDO = "/api/comando";
 
 // VARIABLES GLOBALES PARA GRAFICAS

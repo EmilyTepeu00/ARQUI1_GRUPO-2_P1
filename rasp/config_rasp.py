@@ -48,10 +48,10 @@ PIN_LED_AMARILLO = 6  # Estado ADVERTENCIA / RIEGO_ACTIVO
 PIN_LED_ROJO     = 13 # Estado EMERGENCIA
 
 # Botones físicos (pull-up interno)
-PIN_BTN_MODO   = 19   # Botón 1 — cambiar AUTO/MANUAL
-PIN_BTN_RIEGO  = 20   # Botón 2 — riego manual
-PIN_BTN_LUCES  = 21   # Botón 3 — luces manual
-PIN_BTN_RESET  = 26   # Botón 4 — silenciar alarma / reset
+PIN_BTN_MODO   = 14
+PIN_BTN_RIEGO  = 15
+PIN_BTN_LUCES  = 18
+PIN_BTN_RESET  = 27 
 
 # LCD I2C
 LCD_ADDRESS    = 0x27 # Dirección I2C (probar 0x3F si no funciona)

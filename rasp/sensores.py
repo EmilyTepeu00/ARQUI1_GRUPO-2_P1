@@ -1,93 +1,92 @@
-import Adafruit_DHT
+import adafruit_dht
+import board
 import RPi.GPIO as GPIO
+import serial
+import time as _time
 import config_rasp as cfg
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
+_arduino = None
+_ultima_lectura_arduino = {}
+
 
 def inicializar():
-    # Entradas digitales
-    GPIO.setup(cfg.PIN_DHT11,   GPIO.IN)
     GPIO.setup(cfg.PIN_SUELO_1, GPIO.IN)
     GPIO.setup(cfg.PIN_SUELO_2, GPIO.IN)
     GPIO.setup(cfg.PIN_LDR,     GPIO.IN)
-
-    # SPI bit-banging para MCP3008
-    GPIO.setup(cfg.PIN_SPI_CLK,  GPIO.OUT)
-    GPIO.setup(cfg.PIN_SPI_MOSI, GPIO.OUT)
-    GPIO.setup(cfg.PIN_SPI_MISO, GPIO.IN)
-    GPIO.setup(cfg.PIN_SPI_CS,   GPIO.OUT)
-
     print("[SENSORES] GPIO inicializado")
 
 
-def _leer_adc(canal):
-    """Lee un canal del MCP3008 via SPI bit-banging. Retorna 0-1023."""
-    GPIO.output(cfg.PIN_SPI_CS,  GPIO.HIGH)
-    GPIO.output(cfg.PIN_SPI_CLK, GPIO.LOW)
-    GPIO.output(cfg.PIN_SPI_CS,  GPIO.LOW)
+def inicializar_arduino():
+    global _arduino
+    try:
+        _arduino = serial.Serial('/dev/ttyACM0', 9600, timeout=2)
+        _time.sleep(2)
+        print("[ARDUINO] Conectado OK")
+    except Exception as e:
+        print(f"[ARDUINO] Error: {e}")
 
-    cmd = canal | 0x18
-    cmd <<= 3
-    for _ in range(5):
-        GPIO.output(cfg.PIN_SPI_MOSI, cmd & 0x80)
-        cmd <<= 1
-        GPIO.output(cfg.PIN_SPI_CLK, GPIO.HIGH)
-        GPIO.output(cfg.PIN_SPI_CLK, GPIO.LOW)
 
-    resultado = 0
-    for _ in range(12):
-        GPIO.output(cfg.PIN_SPI_CLK, GPIO.HIGH)
-        GPIO.output(cfg.PIN_SPI_CLK, GPIO.LOW)
-        resultado <<= 1
-        if GPIO.input(cfg.PIN_SPI_MISO):
-            resultado |= 0x1
-
-    GPIO.output(cfg.PIN_SPI_CS, GPIO.HIGH)
-    return resultado >> 1
+def _leer_arduino():
+    global _ultima_lectura_arduino
+    try:
+        linea = _arduino.readline().decode('utf-8').strip()
+        if not linea:
+            return _ultima_lectura_arduino
+        datos = {}
+        for parte in linea.split(','):
+            if ':' in parte:
+                k, v = parte.split(':')
+                datos[k.strip()] = int(v.strip())
+        if datos:
+            _ultima_lectura_arduino = datos
+        return datos
+    except Exception as e:
+        print(f"[ARDUINO] Error lectura: {e}")
+        return _ultima_lectura_arduino
 
 
 def leer_temperatura_humedad():
-    """DHT11 — retorna (temperatura, humedad)."""
-    hum, temp = Adafruit_DHT.read_retry(Adafruit_DHT.DHT11, cfg.PIN_DHT11)
-    if temp is None or hum is None:
-        print("[SENSOR] DHT11 error — reintentando")
+    try:
+        dht = adafruit_dht.DHT11(board.D4, use_pulseio=False)
+        temp = dht.temperature
+        hum  = dht.humidity
+        dht.exit()
+        if temp is None or hum is None:
+            return leer_temperatura_humedad()
+        return (round(temp, 1), round(hum, 1))
+    except Exception as e:
+        print(f"[SENSOR] DHT11 error: {e}")
         return leer_temperatura_humedad()
-    return (round(temp, 1), round(hum, 1))
 
 
 def leer_humedad_suelo(area):
-    """
-    Sensor resistivo con módulo D0.
-    Retorna: "SECO" si D0=HIGH (sin humedad), "NORMAL" si D0=LOW (con humedad).
-    El potenciómetro del módulo define el umbral.
-    """
-    pin = cfg.PIN_SUELO_1 if area == 1 else cfg.PIN_SUELO_2
-    valor = GPIO.input(pin)
-    # La mayoría de módulos: HIGH = seco, LOW = húmedo
-    return "SECO" if valor == GPIO.HIGH else "NORMAL"
+    datos = _leer_arduino()
+    if datos:
+        key = 'SUELO1' if area == 1 else 'SUELO2'
+        if key in datos:
+            valor = datos[key]
+            return "SECO" if valor > 600 else "NORMAL"
+    return "NORMAL"
 
 
 def leer_luz():
-    """
-    Módulo LDR con D0.
-    Retorna: "BAJO" si D0=HIGH (poca luz), "NORMAL" si D0=LOW (hay luz).
-    """
-    valor = GPIO.input(cfg.PIN_LDR)
-    return "BAJO" if valor == GPIO.HIGH else "NORMAL"
+    datos = _leer_arduino()
+    if datos and 'LUZ' in datos:
+        return "BAJO" if datos['LUZ'] < 300 else "NORMAL"
+    return "NORMAL"
 
 
 def leer_gas():
-    """
-    MQ-135 via A0 → MCP3008 canal 0.
-    Retorna valor ADC 0-1023.
-    """
-    return _leer_adc(cfg.CANAL_GAS)
+    datos = _leer_arduino()
+    if datos and 'GAS' in datos:
+        return datos['GAS']
+    return 0
 
 
 def clasificar_suelo(estado):
-    """El sensor ya devuelve SECO o NORMAL directamente."""
     return estado
 
 

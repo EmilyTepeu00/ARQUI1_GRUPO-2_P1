@@ -4,7 +4,7 @@
 // Responsable: Integrante 2
 // 
 // ¿Qué hace este módulo?
-//   1. Lee 30 datos de temperatura desde lecturas.csv
+//   1. Lee 30 datos de Humedad del Aire desde lecturas.csv
 //   2. Calcula la media (promedio)
 //   3. Calcula la varianza
 //   4. Calcula la desviación estándar (raíz de la varianza)
@@ -76,7 +76,7 @@ _start:
     // ----------------------------------------------------------
     // PASO 1: Leer los 30 datos de HUM_AIRE (columna 2) desde CSV
     // ----------------------------------------------------------
-    mov x0, #2              // columna 1 = HUM_AIRE
+    mov x0, #2              // columna 2 = HUM_AIRE
     bl leer_datos           // después de esto, 'datos' tiene los 30 valores
     // x0 ahora tiene cuántos datos se leyeron (debe ser 30)
 
@@ -174,9 +174,9 @@ _start:
     // El archivo debe verse así:
     //   MODULE=VARIANCE
     //   TOTAL_VALUES=30
-    //   MEAN=31
-    //   VARIANCE=18
-    //   STD_DEV=4
+    //   MEAN=28
+    //   VARIANCE=35
+    //   STD_DEV=5
 
     adr x0, buffer_salida   // x0 = inicio del buffer de salida
     mov x9, #0              // x9 = posición actual en el buffer

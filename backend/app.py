@@ -18,14 +18,10 @@ app = Flask(
 CORS(app)
 
 
-# ── HTML ───────────────────────────────────────────────────
-
 @app.route("/")
 def inicio():
     return render_template("index.html")
 
-
-# ── API sensores y estado ──────────────────────────────────
 
 @app.route("/api/estado")
 def api_estado():
@@ -104,27 +100,21 @@ def api_csv():
 
 @app.route("/api/sistema")
 def api_sistema():
-    info = {
-        "csv_completo":  csv_manager.esta_completo(),
-        "csv_filas":     csv_manager.obtener_filas(),
-        "estado":        obtener_estado(),
-        "timestamp":     datetime.now().isoformat()
-    }
-    if config.MODO == "simulado":
-        import simulator
-        info["simulador_activo"] = simulator.esta_corriendo()
-    return jsonify(info)
+    return jsonify({
+        "csv_completo": csv_manager.esta_completo(),
+        "csv_filas":    csv_manager.obtener_filas(),
+        "estado":       obtener_estado(),
+        "timestamp":    datetime.now().isoformat()
+    })
 
-
-# ── Comandos del dashboard ─────────────────────────────────
 
 @app.route("/api/comando", methods=["POST"])
 def api_comando():
-    datos  = request.get_json()
+    datos = request.get_json()
     if not datos:
         return jsonify({"error": "Body JSON requerido"}), 400
     accion = datos.get("accion", "").upper()
-    valor  = datos.get("valor", "").upper()
+    valor  = datos.get("valor",  "").upper()
     if not accion:
         return jsonify({"error": "Campo accion requerido"}), 400
 
@@ -140,30 +130,6 @@ def api_comando():
     })
 
 
-# ── Control simulador (solo en modo simulado) ──────────────
-
-@app.route("/api/simulador/iniciar", methods=["POST"])
-def api_sim_iniciar():
-    if config.MODO != "simulado":
-        return jsonify({"error": "No aplica en modo raspberry"}), 400
-    import simulator
-    datos     = request.get_json() or {}
-    intervalo = datos.get("intervalo", 15)
-    simulator.iniciar(intervalo)
-    return jsonify({"status": "iniciado", "intervalo": intervalo})
-
-
-@app.route("/api/simulador/detener", methods=["POST"])
-def api_sim_detener():
-    if config.MODO != "simulado":
-        return jsonify({"error": "No aplica en modo raspberry"}), 400
-    import simulator
-    simulator.detener()
-    return jsonify({"status": "detenido"})
-
-
-# ── ARM64 ──────────────────────────────────────────────────
-
 @app.route("/api/arm64/ejecutar", methods=["POST"])
 def api_arm64_ejecutar():
     import threading
@@ -171,12 +137,9 @@ def api_arm64_ejecutar():
     return jsonify({"status": "iniciado", "timestamp": datetime.now().isoformat()})
 
 
-# ── Arranque ───────────────────────────────────────────────
-
 def iniciar_servicios():
     print("=" * 55)
-    print("  INVERNADERO INTELIGENTE IoT")
-    print(f"  Modo: {config.MODO.upper()}")
+    print("  INVERNADERO INTELIGENTE IoT — Backend")
     print("=" * 55)
 
     if not db.iniciar():
@@ -184,16 +147,9 @@ def iniciar_servicios():
 
     csv_manager.inicializar()
     mqtt.iniciar()
-
-    if config.MODO == "simulado":
-        import simulator
-        simulator.iniciar(intervalo=15)
-        print("[INFO] Simulador activo — generando datos cada 15s")
-    else:
-        print("[INFO] Modo Raspberry Pi — esperando datos por MQTT")
-
     arm64_runner.iniciar_cuando_csv_completo()
 
+    print("[INFO] Esperando datos de la Raspberry Pi por MQTT...")
     print(f"\n[BACKEND] http://localhost:{config.FLASK_PORT}\n")
 
 

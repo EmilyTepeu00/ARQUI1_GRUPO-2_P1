@@ -6,12 +6,10 @@ from paho.mqtt import client as mqtt_client
 
 import config
 import database as db
-from state import estado_sistema, procesar_comando, aplicar_logica_automatica, clasificar_suelo, clasificar_gas
+from state import procesar_comando, aplicar_logica_automatica, clasificar_suelo, clasificar_gas, obtener_estado
 
-_cliente   = None
-_conectado = False
-
-# Acumula la ultima lectura recibida desde la rasp (modo raspberry)
+_cliente        = None
+_conectado      = False
 _ultima_lectura = {}
 
 
@@ -23,7 +21,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe(f"{config.MQTT_PREFIX}/#")
         print(f"[MQTT] Suscrito a {config.MQTT_PREFIX}/#")
     else:
-        print(f"[MQTT] Fallo de conexion rc={rc}")
+        print(f"[MQTT] Fallo rc={rc}")
         _conectado = False
 
 
@@ -45,44 +43,31 @@ def on_message(client, userdata, msg):
             procesar_comando(payload, origen)
             return
 
-        # En modo raspberry los sensores llegan por MQTT y los procesamos aqui
-        if config.MODO == "raspberry":
-            _procesar_lectura_rasp(topic, payload)
+        _procesar_lectura_rasp(topic, payload)
 
     except Exception as e:
         print(f"[MQTT] Error en mensaje: {e}")
 
 
 def _procesar_lectura_rasp(topic, payload):
-    """
-    Recibe cada topic de sensor de la Raspberry Pi,
-    acumula en _ultima_lectura y cuando tiene todos los datos
-    aplica la logica de control y guarda en MongoDB.
-    """
     global _ultima_lectura
     ts = payload.get("timestamp", datetime.now().isoformat())
 
     if topic == config.TOPIC_TEMPERATURA:
         _ultima_lectura["temperatura"] = payload.get("valor", 0)
         _ultima_lectura["ts"] = ts
-
     elif topic == config.TOPIC_HUMEDAD_AMBIENTE:
         _ultima_lectura["hum_aire"] = payload.get("valor", 0)
-
     elif topic == config.TOPIC_HUMEDAD_SUELO_1:
-        _ultima_lectura["hum_suelo1"] = payload.get("valor", 0)
-
+        _ultima_lectura["hum_suelo1"] = payload.get("valor", "NORMAL")
     elif topic == config.TOPIC_HUMEDAD_SUELO_2:
-        _ultima_lectura["hum_suelo2"] = payload.get("valor", 0)
-
+        _ultima_lectura["hum_suelo2"] = payload.get("valor", "NORMAL")
     elif topic == config.TOPIC_LUZ:
-        _ultima_lectura["luz"] = payload.get("valor", 0)
-
+        _ultima_lectura["luz"] = payload.get("valor", "NORMAL")
     elif topic == config.TOPIC_GAS:
         _ultima_lectura["gas"] = payload.get("valor", 0)
 
-    # Cuando tenemos los 6 sensores guardamos en Mongo
-    campos = {"temperatura","hum_aire","hum_suelo1","hum_suelo2","luz","gas"}
+    campos = {"temperatura", "hum_aire", "hum_suelo1", "hum_suelo2", "luz", "gas"}
     if campos.issubset(_ultima_lectura.keys()):
         _guardar_lectura_completa(_ultima_lectura.copy())
         _ultima_lectura = {}
@@ -107,7 +92,6 @@ def _guardar_lectura_completa(l):
     }
 
     aplicar_logica_automatica(lecturas)
-    from state import obtener_estado
     estado = obtener_estado()
 
     print(f"[RASP] Temp={l['temperatura']}C Suelo1={l['hum_suelo1']}% Gas={l['gas']}")
@@ -127,7 +111,8 @@ def _guardar_lectura_completa(l):
     })
 
     db.guardar(config.COL_ACTUATOR_LOGS, {
-        "timestamp":  ts, "tipo": "actuator_state",
+        "timestamp":  ts,
+        "tipo":       "actuator_state",
         "riego":      estado["riego"],
         "ventilador": estado["ventilador"],
         "luces":      estado["luces"],
@@ -137,7 +122,8 @@ def _guardar_lectura_completa(l):
 
     if estado["global"] != "NORMAL":
         db.guardar(config.COL_EVENTS, {
-            "timestamp": ts, "tipo": "event",
+            "timestamp": ts,
+            "tipo":      "event",
             "estado":    estado["global"],
             "gas":       estado["gas"],
             "riego":     estado["riego"],
@@ -154,7 +140,12 @@ def _guardar_lectura_completa(l):
     )
 
 
-# ── Publicadores ───────────────────────────────────────────
+def publicar_comando_remoto(accion, valor):
+    _publicar(config.TOPIC_CONTROL_REMOTO, {
+        "accion": accion, "valor": valor,
+        "timestamp": datetime.now().isoformat()
+    })
+
 
 def _publicar(topic, datos):
     if not _conectado or _cliente is None:
@@ -165,34 +156,6 @@ def _publicar(topic, datos):
     except Exception as e:
         print(f"[MQTT] Error al publicar: {e}")
 
-
-def publicar_sensores(lecturas):
-    ts = datetime.now().isoformat()
-    _publicar(config.TOPIC_TEMPERATURA,      {"valor": lecturas["temperatura"], "unidad": "C",  "timestamp": ts, "origen": "SIMULADO"})
-    _publicar(config.TOPIC_HUMEDAD_AMBIENTE, {"valor": lecturas["hum_aire"],    "unidad": "%",  "timestamp": ts, "origen": "SIMULADO"})
-    _publicar(config.TOPIC_HUMEDAD_SUELO_1,  {"valor": lecturas["hum_suelo1"],  "estado": lecturas["estado_suelo1"], "area": 1, "timestamp": ts, "origen": "SIMULADO"})
-    _publicar(config.TOPIC_HUMEDAD_SUELO_2,  {"valor": lecturas["hum_suelo2"],  "estado": lecturas["estado_suelo2"], "area": 2, "timestamp": ts, "origen": "SIMULADO"})
-    _publicar(config.TOPIC_LUZ,              {"valor": lecturas["luz"],  "timestamp": ts, "origen": "SIMULADO"})
-    _publicar(config.TOPIC_GAS,              {"valor": lecturas["gas"],  "estado": lecturas["estado_gas"], "timestamp": ts, "origen": "SIMULADO"})
-
-
-def publicar_actuadores():
-    ts = datetime.now().isoformat()
-    _publicar(config.TOPIC_RIEGO,        {"estado": estado_sistema["riego"],      "timestamp": ts})
-    _publicar(config.TOPIC_VENTILADOR,   {"estado": estado_sistema["ventilador"], "timestamp": ts})
-    _publicar(config.TOPIC_LUCES,        {"estado": estado_sistema["luces"],      "timestamp": ts})
-    _publicar(config.TOPIC_ALARMA,       {"estado": estado_sistema["alarma"],     "timestamp": ts})
-    _publicar(config.TOPIC_ESTADO_GLOBAL,{"estado": estado_sistema["global"], "modo": estado_sistema["modo"], "timestamp": ts})
-
-
-def publicar_comando_remoto(accion, valor):
-    _publicar(config.TOPIC_CONTROL_REMOTO, {
-        "accion": accion, "valor": valor,
-        "timestamp": datetime.now().isoformat()
-    })
-
-
-# ── Iniciar / Detener ──────────────────────────────────────
 
 def iniciar():
     global _cliente

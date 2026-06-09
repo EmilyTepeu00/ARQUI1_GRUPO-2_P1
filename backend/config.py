@@ -1,4 +1,4 @@
-# ── MongoDB ────────────────────────────────────────────────
+# MongoDB
 MONGO_URI = (
     "mongodb+srv://Invernadero_user:Invernadero2026"
     "@invernadero-cluster.gdzxx9p.mongodb.net/"
@@ -13,7 +13,7 @@ COL_SYSTEM_STATUS   = "system_status"
 COL_ACTUATOR_LOGS   = "actuator_logs"
 COL_ARM64_RESULTS   = "arm64_results"
 
-# ── MQTT ───────────────────────────────────────────────────
+# MQTT
 MQTT_BROKER = "broker.emqx.io"
 MQTT_PORT   = 1883
 MQTT_PREFIX = "InvernaderoG2_ARQUI1"
@@ -36,7 +36,7 @@ TOPIC_ESTADO_GLOBAL  = f"{MQTT_PREFIX}/estado/global"
 TOPIC_CONTROL_REMOTO = f"{MQTT_PREFIX}/control/remoto"
 TOPIC_CONTROL_MANUAL = f"{MQTT_PREFIX}/control/manual"
 
-# ── CSV ────────────────────────────────────────────────────
+# CSV 
 CSV_FILE     = "lecturas.csv"
 CSV_MAX_ROWS = 30
 CSV_HEADERS  = [
@@ -44,7 +44,7 @@ CSV_HEADERS  = [
     "HUM_SUELO_2","LUZ","GAS","RIEGO_1","RIEGO_2"
 ]
 
-# ── Umbrales ───────────────────────────────────────────────
+# Umbrales
 UMBRAL_TEMP_ALTA       = 32.0
 UMBRAL_HUMEDAD_BAJA    = 40
 UMBRAL_HUMEDAD_NORMAL  = 70
@@ -52,11 +52,6 @@ UMBRAL_LUZ_BAJA        = 300
 UMBRAL_GAS_ADVERTENCIA = 150
 UMBRAL_GAS_EMERGENCIA  = 200
 
-# ── Flask ──────────────────────────────────────────────────
+# Flask
 FLASK_HOST = "0.0.0.0"
 FLASK_PORT = 5000
-
-# ── Modo de operación ──────────────────────────────────────
-# "simulado" → el backend genera datos aleatorios (sin Raspberry Pi)
-# "raspberry" → el backend solo escucha; la Raspberry Pi envía los datos
-MODO = "simulado"

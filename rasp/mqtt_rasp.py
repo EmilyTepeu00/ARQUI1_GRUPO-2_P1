@@ -1,8 +1,3 @@
-"""
-mqtt_rasp.py — Cliente MQTT para la Raspberry Pi
-Publica lecturas de sensores y recibe comandos del dashboard.
-"""
-
 import json
 import random
 import time
@@ -11,9 +6,9 @@ from paho.mqtt import client as mqtt_client
 
 import config_rasp as cfg
 
-_cliente   = None
-_conectado = False
-_cb_comando = None  # callback para procesar comandos recibidos
+_cliente    = None
+_conectado  = False
+_cb_comando = None
 
 
 def on_connect(client, userdata, flags, rc):
@@ -40,12 +35,11 @@ def on_message(client, userdata, msg):
         payload = json.loads(msg.payload.decode())
         topic   = msg.topic
         print(f"[MQTT RX] {topic}: {payload}")
-
         if topic in (cfg.TOPIC_CONTROL_REMOTO, cfg.TOPIC_CONTROL_MANUAL):
             if _cb_comando:
                 _cb_comando(payload)
     except Exception as e:
-        print(f"[MQTT] Error en mensaje: {e}")
+        print(f"[MQTT] Error: {e}")
 
 
 def _pub(topic, datos):
@@ -58,34 +52,33 @@ def _pub(topic, datos):
         print(f"[MQTT] Error: {e}")
 
 
-# ── Publicadores de sensores ───────────────────────────────
-
 def publicar_temperatura(valor):
     _pub(cfg.TOPIC_TEMPERATURA, {
         "valor": valor, "unidad": "C",
-        "timestamp": datetime.now().isoformat(), "origen": "DHT22"
+        "timestamp": datetime.now().isoformat(), "origen": "DHT11"
     })
 
 
 def publicar_humedad_ambiente(valor):
     _pub(cfg.TOPIC_HUMEDAD_AMBIENTE, {
         "valor": valor, "unidad": "%",
-        "timestamp": datetime.now().isoformat(), "origen": "DHT22"
+        "timestamp": datetime.now().isoformat(), "origen": "DHT11"
     })
 
 
-def publicar_humedad_suelo(area, valor, estado):
+def publicar_humedad_suelo(area, estado):
+    """estado = 'SECO' o 'NORMAL' (sensor digital)"""
     topic = cfg.TOPIC_HUMEDAD_SUELO_1 if area == 1 else cfg.TOPIC_HUMEDAD_SUELO_2
     _pub(topic, {
-        "valor": valor, "estado": estado, "area": area,
+        "valor": estado, "area": area,
         "timestamp": datetime.now().isoformat(),
         "origen": f"sensor_suelo_area{area}"
     })
 
 
-def publicar_luz(valor):
+def publicar_luz(estado):
     _pub(cfg.TOPIC_LUZ, {
-        "valor": valor,
+        "valor": estado,
         "timestamp": datetime.now().isoformat(), "origen": "LDR"
     })
 
@@ -93,7 +86,7 @@ def publicar_luz(valor):
 def publicar_gas(valor, estado):
     _pub(cfg.TOPIC_GAS, {
         "valor": valor, "estado": estado,
-        "timestamp": datetime.now().isoformat(), "origen": "MQ2"
+        "timestamp": datetime.now().isoformat(), "origen": "MQ135"
     })
 
 
@@ -104,12 +97,9 @@ def publicar_estado_global(estado, modo):
     })
 
 
-# ── Iniciar / Detener ──────────────────────────────────────
-
 def iniciar(cb_comando=None):
     global _cliente, _cb_comando
     _cb_comando = cb_comando
-
     client_id = f"InvernaderoG2_rasp-{random.randint(0, 9999)}"
     client = mqtt_client.Client(client_id=client_id)
     _cliente = client

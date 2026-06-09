@@ -22,20 +22,20 @@
 //   cat resultado_media.txt
 // ============================================================
 
-// ---- Numeros de syscall Linux AArch64 ---------------------
-.equ SYS_OPENAT, 56
-.equ SYS_CLOSE,  57
-.equ SYS_READ,   63
-.equ SYS_WRITE,  64
-.equ SYS_EXIT,   93
+// ---- Numeros de syscall Linux AArch64 --------------------- ordenes para el sistema
+.equ SYS_OPENAT, 56  //abrir archivo
+.equ SYS_CLOSE,  57 //cerrar archivo
+.equ SYS_READ,   63 //leer archivo
+.equ SYS_WRITE,  64 //escribir archivo
+.equ SYS_EXIT,   93 //terminar archivo
 
-// ---- Flags para abrir/crear archivos ----------------------
-.equ AT_FDCWD,   -100
-.equ O_RDONLY,   0
+// ---- Flags para abrir/crear archivos ---------------------- configuraciones de openat (para archivos)
+.equ AT_FDCWD,   -100 // Directorio de trabajo actual
+.equ O_RDONLY,   0 //solo lectura (se abrira el archivo pero solo se leera)
 .equ O_WRONLY,   1
-.equ O_CREAT,    64
-.equ O_TRUNC,    512
-.equ PERM_644,   0644
+.equ O_CREAT,    64 //Crear el archivo si no existe
+.equ O_TRUNC,    512 // Vaciar el contenido anterior
+.equ PERM_644,   0644 //permisos de linux 
 
 // ---- Constantes del modulo --------------------------------
 .equ COL_TEMP,   1      // columna TEMP en el CSV (0-indexada)
@@ -47,8 +47,8 @@
 // ============================================================
 .section .data
 
-archivo_csv:    .asciz "lecturas.csv"
-archivo_salida: .asciz "resultado_media.txt"
+archivo_csv:    .asciz "lecturas.csv" //Guarda archivo csv y agrega \0 al final
+archivo_salida: .asciz "resultado_media.txt" // nombre del archivo de salida
 
 // Cada etiqueta _len calcula automaticamente la longitud
 lbl_module:     .ascii "MODULE=WEIGHTED_MEAN\n"
@@ -70,11 +70,11 @@ lbl_mean:       .ascii "WEIGHTED_MEAN="
 // ============================================================
 // SECCION BSS - memoria sin inicializar
 // ============================================================
-.section .bss
+.section .bss // Memoria reservada pero sin inicializar
 
 buf_csv:    .skip 4096      // buffer para leer todo el CSV de una vez
 buf_num:    .skip 32        // buffer temporal para convertir numero a texto
-datos:      .skip 240       // arreglo de 30 valores (30 x 8 bytes)
+datos:      .skip 240       // arreglo de 30 valores (30 x 8 bytes) cada entero ocupa 8 bytes
 
 // Resultados del calculo
 sum_x:      .skip 8         // suma simple de los datos
@@ -97,31 +97,33 @@ media:      .skip 8         // media ponderada final
 // ============================================================
 _start:
     // 1. Abrir lecturas.csv
-    mov  x8,  SYS_OPENAT
-    mov  x0,  AT_FDCWD
-    adr  x1,  archivo_csv
-    mov  x2,  O_RDONLY
+    mov  x8,  SYS_OPENAT // Llama al sistema para hacer una operacion (abrir un archivo)
+    mov  x0,  AT_FDCWD // Busca el archivo desde el directorio donde estoy ejecutando el programa
+    adr  x1,  archivo_csv //carga la direccion del csv
+    mov  x2,  O_RDONLY 
     mov  x3,  0
-    svc  0
-    cmp  x0,  0
-    blt  salir_error        // si fd < 0, no se pudo abrir
-    mov  x19, x0            // x19 = descriptor del CSV
+    svc  0  //(se devuelve el resultado en x0)
+    cmp  x0,  0 //cmp es para comparar, x0 con 0 
+    blt  salir_error        // si fd < 0, no se pudo abrir (blt salda si es menor si x0 (lo almacenado) es menor a 0 ) se sale
+    mov  x19, x0            // x19 = descriptor del CSV (so copia x0 en x19 guardarlo porque luego se usara) se guarda indentificador
 
-    // 2. Leer todo el archivo en buf_csv
+    // 2. Leer todo el archivo en buf_csv (copiar el contenido del archivo a memoria)
     mov  x8,  SYS_READ
-    mov  x0,  x19
-    adr  x1,  buf_csv
-    mov  x2,  4096
+    mov  x0,  x19 //copiar x19 dentro de x0
+    adr  x1,  buf_csv //La información que leas guárdala en buf_csv
+    mov  x2,  4096 //Como máximo quiero leer 4096 bytes.
     svc  0                  // x0 = bytes leidos (lo usamos en parsear)
-    mov  x20, x0            // x20 = bytes leidos
+    mov  x20, x0            // x20 = bytes leidos (Guardar la cantidad de bytes leídos.)
 
-    // 3. Cerrar el archivo (ya tenemos los datos en memoria)
+    // 3. Cerrar el archivo (ya tenemos los datos en memoria) (se cierra el archivo de lecturas.csv ya que ya se guardo la informacion)
     mov  x8,  SYS_CLOSE
-    mov  x0,  x19
+    mov  x0,  x19 //Quiero cerrar el archivo guardado con identificador en x19.
     svc  0
 
     // 4. Parsear el CSV y llenar el arreglo datos[]
-    bl   parsear_csv
+    bl   parsear_csv //bl Llamar una función 
+
+//  parsear_csv toma la informacion que esta en buf_csv y extrae solamente la informacion de la columna temp y los guarda en un arreglo 
 
     // 5. Calcular la media ponderada
     bl   calcular_media
@@ -131,12 +133,12 @@ _start:
 
     // 7. Salir con exito
     mov  x8,  SYS_EXIT
-    mov  x0,  0
+    mov  x0,  0 //termina programa 
     svc  0
 
 salir_error:
     mov  x8,  SYS_EXIT
-    mov  x0,  1
+    mov  x0,  1 //
     svc  0
 
 
@@ -422,7 +424,6 @@ escribir_numero:
 
     adr  x9,  buf_num
     add  x10, x9, #28       // x10 apunta al ultimo byte del buffer
-
     // Poner '\n' en la posicion 28
     mov  w11, '\n'
     strb w11, [x10]

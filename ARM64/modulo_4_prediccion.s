@@ -37,7 +37,8 @@ nombre_salida:  .asciz "resultado_prediccion.txt"
 // Textos fijos en formato .asciz 
 lbl_header: .asciz "MODULE=PREDICTION\nINITIAL_VALUE="
 lbl_final:  .asciz "\nFINAL_VALUE="
-
+lbl_diff:   .asciz "\nTOTAL_DIFF="
+lbl_nl:     .asciz "\n"
 
 .section .bss
 buffer_salida:  .skip 512    // Buffer donde se armara el archivo completo
@@ -58,10 +59,14 @@ _start:
     bl  leer_datos          // El arreglo global 'datos' se llena con 30 registros
 
     // 2. Extraer el valor inicial (fila 1) y valor final (fila 30)
+    // PASAMOS A REGISTROS SEGUROS (x19, x22-x25) QUE NO SE CORRUMPEN CON 'bl'
     adr x9, datos           // Cargar la dirección base del arreglo 'datos'
     ldr x19, [x9, #0]       // x19 = Valor Inicial (datos[0])
-    ldr x22, [x9, #232]   // x22 = Valor Final (datos[29] -> 29 * 8 bytes = 232)
+    ldr x22, [x9, #232]     // x22 = Valor Final (datos[29] -> 29 * 8 bytes = 232)
 
+    // 3. Realizar los cálculos matemáticos
+    sub x23, x22, x19       // x23 = Diferencia total (Final - Inicial)
+    mov x4, #29             // x4 = 29 intervalos de cambio (30 datos - 1)
 
     // 4. Construcción del Buffer de salida en memoria
     adr x20, buffer_salida  // x20 será el puntero de escritura en el buffer
@@ -69,7 +74,7 @@ _start:
     // --- Escribir Encabezado y Valor Inicial ---
     adr x0, lbl_header
     bl  copiar_a_buffer
-    mov x0, x19            
+    mov x0, x19             // <-- Usamos x19
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
@@ -84,7 +89,20 @@ _start:
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // Guardar el buffer completo en el archivo físico
+    // --- Escribir Diferencia Total ---
+    adr x0, lbl_diff
+    bl  copiar_a_buffer
+    mov x0, x23             
+    adr x1, buf_conv
+    bl  formatear_numero
+    adr x0, buf_conv
+    bl  copiar_a_buffer
+
+    // --- Escribir salto de línea final ---
+    adr x0, lbl_nl
+    bl  copiar_a_buffer
+
+    // 5. Guardar el buffer completo en el archivo físico
     adr x0, nombre_salida
     adr x1, buffer_salida
     sub x2, x20, x1         
@@ -96,6 +114,10 @@ exit_program:
     mov x8, #93             // Syscall SYS_EXIT
     svc #0
 
+
+// ============================================================
+// FUNCIONES AUXILIARES INTERNAS
+// ============================================================
 
 // --- Función: copiar_a_buffer ---
 // Copia una cadena terminada en \0 (x0) hacia el buffer de salida (x20)

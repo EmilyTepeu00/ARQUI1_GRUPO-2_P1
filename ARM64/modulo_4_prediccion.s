@@ -38,6 +38,7 @@ nombre_salida:  .asciz "resultado_prediccion.txt"
 lbl_header: .asciz "MODULE=PREDICTION\nINITIAL_VALUE="
 lbl_final:  .asciz "\nFINAL_VALUE="
 lbl_diff:   .asciz "\nTOTAL_DIFF="
+lbl_avg:    .asciz "\nAVG_CHANGE="
 lbl_nl:     .asciz "\n"
 
 .section .bss
@@ -67,6 +68,7 @@ _start:
     // 3. Realizar los cálculos matemáticos
     sub x23, x22, x19       // x23 = Diferencia total (Final - Inicial)
     mov x4, #29             // x4 = 29 intervalos de cambio (30 datos - 1)
+    sdiv x24, x23, x4       // x24 = Promedio de cambio (Diferencia / 29)
 
     // 4. Construcción del Buffer de salida en memoria
     adr x20, buffer_salida  // x20 será el puntero de escritura en el buffer
@@ -74,7 +76,7 @@ _start:
     // --- Escribir Encabezado y Valor Inicial ---
     adr x0, lbl_header
     bl  copiar_a_buffer
-    mov x0, x19             // <-- Usamos x19
+    mov x0, x19             
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
@@ -97,6 +99,16 @@ _start:
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
+
+    // --- Escribir Promedio de Cambio ---
+    adr x0, lbl_avg
+    bl  copiar_a_buffer
+    mov x0, x24            
+    adr x1, buf_conv
+    bl  formatear_numero
+    adr x0, buf_conv
+    bl  copiar_a_buffer
+
 
     // --- Escribir salto de línea final ---
     adr x0, lbl_nl

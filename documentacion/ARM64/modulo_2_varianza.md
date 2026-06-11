@@ -509,19 +509,12 @@ columna HUM_AIRE para usarlo después.
 
 ---
 
-## Captura 6 — Syscall openat preparada
-x8=56 es el número de la syscall `openat` para abrir el archivo
-lecturas.csv. x0=2 sigue siendo la columna HUM_AIRE y x19=2
-confirma que el valor fue preservado correctamente.
-
-![Captura 6](evidencia_gdb/captura6.jpeg)
-
----
-
-## Captura 7 — AT_FDCWD directorio actual
-x0=-100 es el valor de AT_FDCWD que le indica al sistema operativo
-que busque el archivo lecturas.csv en el directorio actual.
-x8=56 confirma que se está preparando la syscall openat.
+## Captura 7 — Syscall openat y AT_FDCWD
+Se puede observar que x8=56 es el número de la syscall `openat` 
+para abrir el archivo lecturas.csv. x0=-100 es el valor de AT_FDCWD 
+que le indica al sistema operativo que busque el archivo en el 
+directorio actual. x19=2 confirma que el número de columna 
+HUM_AIRE fue preservado correctamente durante todo el proceso.
 
 ![Captura 7](evidencia_gdb/captura7.jpeg)
 

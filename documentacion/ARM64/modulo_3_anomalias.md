@@ -462,3 +462,55 @@ Descripción de cada campo:
 | ANOMALIES    | Cantidad de anomalías detectadas |
 | SYSTEM_RISK  | Nivel de riesgo obtenido         |
 
+---
+
+# 12. Evidencia de Depuración con GDB
+
+## Captura 1 — Conexión remota
+
+Se conecta GDB al programa mediante `target remote :1234`. GDB se conecta correctamente al programa en ejecución bajo QEMU y muestra la dirección donde se encuentra `_start`, punto de entrada del programa.
+
+![Captura 1](evidencia_gdb/modulo3_1.png)
+
+## Captura 2 — Breakpoint en _start
+
+Se establece un breakpoint en `_start`, punto de entrada del programa. GDB asigna el breakpoint en la dirección 0x4000b4.
+
+![Captura 2](evidencia_gdb/modulo3_2.png)
+
+## Captura 3 — Programa detenido en _start
+
+El programa se detiene en el breakpoint de `_start`. GDB confirma que estamos en la dirección 0x4000b4, inicio del módulo 3.
+
+![Captura 3](evidencia_gdb/modulo3_3.png)
+
+## Captura 4 — Registros iniciales
+
+Estado inicial de los registros. `x0=6` indica que el módulo leerá la columna 6 (GAS) del CSV. `x19=0` porque aún no se ha guardado ningún valor.
+
+![Captura 4](evidencia_gdb/modulo3_4.png)
+
+## Captura 5 — Entrada a leer_datos y preservación de columna
+
+El programa avanza instrucción por instrucción con `si`. Se observa que `x0=6` se conserva como parámetro de la columna GAS. Al entrar a `leer_datos`, el valor se guarda en `x19=6`, preservándolo para usarlo durante toda la ejecución.
+
+![Captura 5](evidencia_gdb/modulo3_5.png)
+
+## Captura 6 — Syscall openat y AT_FDCWD
+
+Se observa que `x8=56` es el numero de la syscall `openat` para abrir el archivo `lecturas.csv`. `x0=-100` es el valor de `AT_FDCWD` que le indica al sistema operativo que busque el archivo en el directorio actual. `x19=6` confirma que el numero de columna GAS fue preservado correctamente durante todo el proceso.
+
+![Captura 6](evidencia_gdb/modulo3_6.png)
+
+## Captura 7 — Programa terminado exitosamente
+
+El programa continua su ejecución, procesa los 30 datos de gas, calcula la media, desviación estándar y detecta anomalías. Finaliza con código de éxito.
+
+![Captura 7](evidencia_gdb/modulo3_7.png)
+
+## Captura 8 — Resultados del módulo
+
+El programa terminó exitosamente. Se verifica el archivo de salida `resultado_anomalias.txt`. `MEAN=111` es el promedio de gas en ppm, `STD_DEV=11` es la desviación estándar, `ANOMALIES=0` indica que no se detectaron valores anómalos y `SYSTEM_RISK=NORMAL`.
+
+![Captura 8](evidencia_gdb/modulo3_8.png)
+

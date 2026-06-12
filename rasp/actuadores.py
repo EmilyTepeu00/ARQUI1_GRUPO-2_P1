@@ -24,6 +24,7 @@ def inicializar():
         GPIO.output(pin, GPIO.LOW)
     print("[ACTUADORES] GPIO inicializado")
 
+    GPIO.output(cfg.PIN_BUZZER, GPIO.LOW)
 
 def _set(pin, encendido):
     GPIO.output(pin, GPIO.HIGH if encendido else GPIO.LOW)
@@ -51,12 +52,10 @@ def luces(encender):
     _set(cfg.PIN_LED_LUZ_2, encender)
     print(f"[ACTUADOR] Luces -> {'ON' if encender else 'OFF'}")
 
-
 def buzzer(encender):
     _estado["buzzer"] = encender
-    _set(cfg.PIN_BUZZER, encender)
+    GPIO.output(cfg.PIN_BUZZER, GPIO.HIGH if encender else GPIO.LOW)
     print(f"[ACTUADOR] Buzzer -> {'ON' if encender else 'OFF'}")
-
 
 def set_led_estado(estado_global):
     _set(cfg.PIN_LED_VERDE,    False)

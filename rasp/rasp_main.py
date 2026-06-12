@@ -1,9 +1,6 @@
 """
 rasp_main.py — Programa IoT principal de la Raspberry Pi 4
 Lee sensores, controla actuadores, publica por MQTT.
-
-Arrancar:
-    python rasp_main.py
 """
 
 import time
@@ -19,7 +16,6 @@ import lcd
 import botones
 import mqtt_rasp as mqtt
 
-# Estado del sistema
 estado = {
     "global":     "NORMAL",
     "modo":       "AUTOMATICO",
@@ -34,11 +30,15 @@ _riego_activo        = False
 _tiempo_ultimo_riego = 0
 _corriendo           = True
 
-# Control automático
+
 def aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado):
     global _riego_activo, _tiempo_ultimo_riego
 
     estado["gas"] = gas_estado
+
+    if gas_estado != "GAS_EMERGENCIA" and estado["alarma"]:
+        estado["alarma"] = False
+        actuadores.buzzer(False)
 
     if gas_estado == "GAS_EMERGENCIA":
         estado["global"]     = "EMERGENCIA"
@@ -47,11 +47,9 @@ def aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado):
         actuadores.ventilador(True)
         actuadores.buzzer(True)
         actuadores.set_led_estado("EMERGENCIA")
-        return
 
     if estado["modo"] == "AUTOMATICO":
 
-        # Ventilador
         if gas_estado == "GAS_ADVERTENCIA" or temp > cfg.UMBRAL_TEMP_ALTA:
             estado["ventilador"] = True
             actuadores.ventilador(True)
@@ -59,7 +57,6 @@ def aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado):
             estado["ventilador"] = False
             actuadores.ventilador(False)
 
-        # Luces — el módulo LDR devuelve "BAJO" o "NORMAL"
         if luz == "BAJO":
             estado["luces"] = True
             actuadores.luces(True)
@@ -67,7 +64,6 @@ def aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado):
             estado["luces"] = False
             actuadores.luces(False)
 
-        # Riego — sensor devuelve "SECO" o "NORMAL"
         ahora  = time.time()
         pausa_ok = (ahora - _tiempo_ultimo_riego) > cfg.PAUSA_ENTRE_RIEGO
 
@@ -79,8 +75,9 @@ def aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado):
             if not _riego_activo:
                 estado["riego"] = "RIEGO_OFF"
 
-    # Estado global
-    if _riego_activo:
+    if gas_estado == "GAS_EMERGENCIA":
+        estado["global"] = "EMERGENCIA"
+    elif _riego_activo:
         estado["global"] = "RIEGO_ACTIVO"
     elif estado["modo"] == "MANUAL":
         estado["global"] = "MODO_MANUAL"
@@ -112,8 +109,6 @@ def _activar_riego():
     threading.Thread(target=_ciclo, daemon=True).start()
 
 
-# LCD rotativa 
-
 _lcd_pagina = 0
 
 def actualizar_lcd(temp, hum_aire, suelo1, suelo2, luz, gas_valor, gas_estado):
@@ -136,14 +131,12 @@ def actualizar_lcd(temp, hum_aire, suelo1, suelo2, luz, gas_valor, gas_estado):
     _lcd_pagina += 1
 
 
-# Callbacks de botones 
-
 def btn_modo():
     nuevo = "MANUAL" if estado["modo"] == "AUTOMATICO" else "AUTOMATICO"
     estado["modo"] = nuevo
     print(f"[BTN] Modo -> {nuevo}")
     lcd.escribir(f"Modo: {nuevo}", "")
-    mqtt.publicar_estado_global(estado["global"], estado["modo"])
+    mqtt.publicar_comando_manual("MODO", nuevo)
 
 
 def btn_riego():
@@ -153,6 +146,7 @@ def btn_riego():
     if not _riego_activo:
         estado["riego"] = "RIEGO_MANUAL"
         print("[BTN] Riego manual")
+        mqtt.publicar_comando_manual("RIEGO_AREA1", "ON")
         _activar_riego()
 
 
@@ -160,7 +154,7 @@ def btn_luces():
     estado["luces"] = not estado["luces"]
     actuadores.luces(estado["luces"])
     print(f"[BTN] Luces -> {'ON' if estado['luces'] else 'OFF'}")
-
+    mqtt.publicar_comando_manual("LUCES", "ON" if estado["luces"] else "OFF")
 
 def btn_reset():
     estado["alarma"]  = False
@@ -170,9 +164,7 @@ def btn_reset():
     actuadores.set_led_estado("NORMAL")
     print("[BTN] Reset — alarma silenciada")
     lcd.escribir("Alarma silenciada", "Modo: AUTO")
-
-
-# Comandos remotos del dashboard 
+    mqtt.publicar_comando_manual("RESET", "")
 
 def procesar_comando(payload):
     accion = payload.get("accion", "").upper()
@@ -207,31 +199,30 @@ def procesar_comando(payload):
         btn_reset()
 
 
-# Ciclo principal
-
 def ciclo():
     print(f"\n{'='*50}")
     print(f"[CICLO] {datetime.now().strftime('%H:%M:%S')}")
 
     temp, hum_aire = sensores.leer_temperatura_humedad()
-    suelo1         = sensores.leer_humedad_suelo(1)
-    suelo2         = sensores.leer_humedad_suelo(2)
+    valor_suelo1   = sensores.leer_humedad_suelo_valor(1)
+    valor_suelo2   = sensores.leer_humedad_suelo_valor(2)
+    suelo1         = "SECO" if valor_suelo1 > 800 else "NORMAL"
+    suelo2         = "SECO" if valor_suelo2 > 800 else "NORMAL"
     luz            = sensores.leer_luz()
     gas_valor      = sensores.leer_gas()
     gas_estado     = sensores.clasificar_gas(gas_valor)
 
     print(f"  Temp={temp}C  Hum={hum_aire}%")
-    print(f"  Suelo1={suelo1}  Suelo2={suelo2}")
+    print(f"  Suelo1={suelo1}({valor_suelo1})  Suelo2={suelo2}({valor_suelo2})")
     print(f"  Luz={luz}  Gas={gas_valor} ({gas_estado})")
 
     aplicar_control(temp, suelo1, suelo2, luz, gas_valor, gas_estado)
     print(f"  Estado={estado['global']}  Modo={estado['modo']}")
 
-    # Publicar por MQTT — el backend recibe y guarda en MongoDB
     mqtt.publicar_temperatura(temp)
     mqtt.publicar_humedad_ambiente(hum_aire)
-    mqtt.publicar_humedad_suelo(1, suelo1)
-    mqtt.publicar_humedad_suelo(2, suelo2)
+    mqtt.publicar_humedad_suelo(1, valor_suelo1, suelo1)
+    mqtt.publicar_humedad_suelo(2, valor_suelo2, suelo2)
     mqtt.publicar_luz(luz)
     mqtt.publicar_gas(gas_valor, gas_estado)
     mqtt.publicar_estado_global(estado["global"], estado["modo"])
@@ -259,8 +250,6 @@ def shutdown(sig, frame):
     sys.exit(0)
 
 
-# Arranque
-
 if __name__ == "__main__":
     print("=" * 50)
     print("  INVERNADERO — Raspberry Pi 4")
@@ -270,6 +259,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, shutdown)
 
     sensores.inicializar()
+    sensores.inicializar_arduino()
     actuadores.inicializar()
     lcd.inicializar()
     botones.inicializar()

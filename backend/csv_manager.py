@@ -24,16 +24,21 @@ def inicializar():
         _completo   = _id_counter > config.CSV_MAX_ROWS
         print(f"[CSV] Existente — {len(filas)} registros, continuando desde ID {_id_counter}")
 
-
 def agregar_fila(temp, hum_aire, hum_suelo1, hum_suelo2, luz, gas, riego1, riego2):
     global _id_counter, _completo
     with _lock:
         if _completo or _id_counter > config.CSV_MAX_ROWS:
             _completo = True
             return False
+
+        suelo1_num = 0 if hum_suelo1 == "SECO" else 1
+        suelo2_num = 0 if hum_suelo2 == "SECO" else 1
+        luz_num    = 0 if luz == "BAJO" else 1
+
         fila = [_id_counter, round(float(temp),1), int(hum_aire),
-                int(hum_suelo1), int(hum_suelo2), int(luz), int(gas),
+                suelo1_num, suelo2_num, luz_num, int(gas),
                 int(riego1), int(riego2)]
+
         with open(config.CSV_FILE, "a", newline="") as f:
             csv.writer(f).writerow(fila)
         print(f"[CSV] Fila {_id_counter}/{config.CSV_MAX_ROWS}")
@@ -44,7 +49,6 @@ def agregar_fila(temp, hum_aire, hum_suelo1, hum_suelo2, luz, gas, riego1, riego
             _completo = True
             print("[CSV] COMPLETO — 30 registros listos para ARM64")
         return True
-
 
 def esta_completo():
     return _completo

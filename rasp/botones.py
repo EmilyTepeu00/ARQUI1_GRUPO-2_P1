@@ -1,8 +1,13 @@
 import RPi.GPIO as GPIO
+import threading
+import time
 import config_rasp as cfg
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
+
+_callbacks = {}
+_corriendo = True
 
 
 def inicializar():
@@ -13,11 +18,25 @@ def inicializar():
 
 
 def registrar_todos(cb_modo, cb_riego, cb_luces, cb_reset):
-    GPIO.add_event_detect(cfg.PIN_BTN_MODO,  GPIO.FALLING,
-                          callback=lambda ch: cb_modo(),  bouncetime=300)
-    GPIO.add_event_detect(cfg.PIN_BTN_RIEGO, GPIO.FALLING,
-                          callback=lambda ch: cb_riego(), bouncetime=300)
-    GPIO.add_event_detect(cfg.PIN_BTN_LUCES, GPIO.FALLING,
-                          callback=lambda ch: cb_luces(), bouncetime=300)
-    GPIO.add_event_detect(cfg.PIN_BTN_RESET, GPIO.FALLING,
-                          callback=lambda ch: cb_reset(), bouncetime=300)
+    _callbacks[cfg.PIN_BTN_MODO]  = cb_modo
+    _callbacks[cfg.PIN_BTN_RIEGO] = cb_riego
+    _callbacks[cfg.PIN_BTN_LUCES] = cb_luces
+    _callbacks[cfg.PIN_BTN_RESET] = cb_reset
+    threading.Thread(target=_monitorear, daemon=True).start()
+    print("[BOTONES] Monitoreo iniciado")
+
+
+def _monitorear():
+    estados = {pin: GPIO.HIGH for pin in _callbacks}
+    while _corriendo:
+        for pin, callback in _callbacks.items():
+            actual = GPIO.input(pin)
+            if estados[pin] == GPIO.HIGH and actual == GPIO.LOW:
+                print(f"[BOTON] Pin {pin} presionado")
+                try:
+                    callback()
+                except Exception as e:
+                    print(f"[BOTON] Error: {e}")
+                time.sleep(0.3)
+            estados[pin] = actual
+        time.sleep(0.05)

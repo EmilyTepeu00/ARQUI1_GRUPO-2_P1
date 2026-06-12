@@ -32,6 +32,7 @@ def inicializar_arduino():
 def _leer_arduino():
     global _ultima_lectura_arduino
     try:
+        _arduino.reset_input_buffer()
         linea = _arduino.readline().decode('utf-8').strip()
         if not linea:
             return _ultima_lectura_arduino
@@ -62,21 +63,23 @@ def leer_temperatura_humedad():
         return leer_temperatura_humedad()
 
 
-def leer_humedad_suelo(area):
+def leer_humedad_suelo_valor(area):
     datos = _leer_arduino()
     if datos:
         key = 'SUELO1' if area == 1 else 'SUELO2'
         if key in datos:
-            valor = datos[key]
-            return "SECO" if valor > 600 else "NORMAL"
-    return "NORMAL"
+            return datos[key]
+    return 1023
+
+
+def leer_humedad_suelo(area):
+    valor = leer_humedad_suelo_valor(area)
+    return "SECO" if valor > 800 else "NORMAL"
 
 
 def leer_luz():
-    datos = _leer_arduino()
-    if datos and 'LUZ' in datos:
-        return "BAJO" if datos['LUZ'] < 300 else "NORMAL"
-    return "NORMAL"
+    valor = GPIO.input(cfg.PIN_LDR)
+    return "BAJO" if valor == GPIO.HIGH else "NORMAL"
 
 
 def leer_gas():

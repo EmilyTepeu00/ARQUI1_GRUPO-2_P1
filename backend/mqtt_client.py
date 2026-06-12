@@ -36,7 +36,6 @@ def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
         topic   = msg.topic
-        print(f"[MQTT RX] {topic}: {payload}")
 
         if topic in (config.TOPIC_CONTROL_REMOTO, config.TOPIC_CONTROL_MANUAL):
             origen = "REMOTO" if topic == config.TOPIC_CONTROL_REMOTO else "MANUAL"
@@ -59,9 +58,11 @@ def _procesar_lectura_rasp(topic, payload):
     elif topic == config.TOPIC_HUMEDAD_AMBIENTE:
         _ultima_lectura["hum_aire"] = payload.get("valor", 0)
     elif topic == config.TOPIC_HUMEDAD_SUELO_1:
-        _ultima_lectura["hum_suelo1"] = payload.get("valor", "NORMAL")
+        _ultima_lectura["hum_suelo1"]     = payload.get("estado", "NORMAL")
+        _ultima_lectura["hum_suelo1_val"] = payload.get("valor", 0)
     elif topic == config.TOPIC_HUMEDAD_SUELO_2:
-        _ultima_lectura["hum_suelo2"] = payload.get("valor", "NORMAL")
+        _ultima_lectura["hum_suelo2"]     = payload.get("estado", "NORMAL")
+        _ultima_lectura["hum_suelo2_val"] = payload.get("valor", 0)
     elif topic == config.TOPIC_LUZ:
         _ultima_lectura["luz"] = payload.get("valor", "NORMAL")
     elif topic == config.TOPIC_GAS:
@@ -78,6 +79,8 @@ def _guardar_lectura_completa(l):
     estado_suelo1 = clasificar_suelo(l["hum_suelo1"])
     estado_suelo2 = clasificar_suelo(l["hum_suelo2"])
     estado_gas    = clasificar_gas(l["gas"])
+    suelo1_val    = l.get("hum_suelo1_val", 0)
+    suelo2_val    = l.get("hum_suelo2_val", 0)
 
     lecturas = {
         "temperatura":   l["temperatura"],
@@ -94,7 +97,7 @@ def _guardar_lectura_completa(l):
     aplicar_logica_automatica(lecturas)
     estado = obtener_estado()
 
-    print(f"[RASP] Temp={l['temperatura']}C Suelo1={l['hum_suelo1']}% Gas={l['gas']}")
+    print(f"[RASP] Temp={l['temperatura']}C Suelo1={l['hum_suelo1']}({suelo1_val}) Gas={l['gas']}")
     print(f"       Estado={estado['global']} Riego={estado['riego']}")
 
     db.guardar(config.COL_SENSOR_READINGS, {
@@ -103,8 +106,8 @@ def _guardar_lectura_completa(l):
         "origen":      "RASPBERRY_PI",
         "temperatura": {"valor": l["temperatura"], "unidad": "C"},
         "hum_aire":    {"valor": l["hum_aire"],    "unidad": "%"},
-        "hum_suelo_1": {"valor": l["hum_suelo1"],  "estado": estado_suelo1},
-        "hum_suelo_2": {"valor": l["hum_suelo2"],  "estado": estado_suelo2},
+        "hum_suelo_1": {"valor": l["hum_suelo1"], "valor_num": suelo1_val, "estado": estado_suelo1},
+        "hum_suelo_2": {"valor": l["hum_suelo2"], "valor_num": suelo2_val, "estado": estado_suelo2},
         "luz":         {"valor": l["luz"]},
         "gas":         {"valor": l["gas"], "estado": estado_gas},
         "estado":      estado["global"],

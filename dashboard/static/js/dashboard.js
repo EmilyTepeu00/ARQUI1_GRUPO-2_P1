@@ -46,9 +46,8 @@ const MENSAJES_ESTADO = {
 function actualizarBarraProgreso(id, valor) {
     const el = document.getElementById(id);
     if (!el) return;
-    const color = valor < 30 ? '#dc3545' : valor < 50 ? '#ffc107' : '#28a745';
     el.style.setProperty('--pw', `${valor}%`);
-    el.style.setProperty('--pc', color);
+    el.style.setProperty('--pc', valor < 30 ? '#dc3545' : valor < 50 ? '#ffc107' : '#28a745');
 }
 
 async function actualizarEstado() {
@@ -70,13 +69,10 @@ async function actualizarEstado() {
         document.getElementById('gas').textContent         = data.nivel_gas !== '--' ? data.nivel_gas : '--';
         document.getElementById('estadoGas').textContent   = data.estado_gas || '--';
 
-        document.getElementById('suelo1').textContent      = data.suelo_area1 !== '--' ? data.suelo_area1 : '--';
-        document.getElementById('suelo2').textContent      = data.suelo_area2 !== '--' ? data.suelo_area2 : '--';
+        document.getElementById('suelo1').textContent       = data.suelo_area1 !== '--' ? data.suelo_area1 : '--';
+        document.getElementById('suelo2').textContent       = data.suelo_area2 !== '--' ? data.suelo_area2 : '--';
         document.getElementById('estadoSuelo1').textContent = data.estado_suelo1 || '--';
         document.getElementById('estadoSuelo2').textContent = data.estado_suelo2 || '--';
-
-        if (data.suelo_area1 !== '--') actualizarBarraProgreso('progress1', data.suelo_area1);
-        if (data.suelo_area2 !== '--') actualizarBarraProgreso('progress2', data.suelo_area2);
 
         document.getElementById('riego').textContent      = data.riego;
         document.getElementById('ventilacion').textContent = data.ventilacion;
@@ -105,8 +101,8 @@ async function actualizarGraficas() {
 
 async function actualizarHistorial() {
     try {
-        const eventos   = await fetch('/api/eventos?n=10').then(r => r.json());
-        const comandos  = await fetch('/api/comandos?n=10').then(r => r.json());
+        const eventos  = await fetch('/api/eventos?n=10').then(r => r.json());
+        const comandos = await fetch('/api/comandos?n=10').then(r => r.json());
 
         const eEl = document.getElementById('eventosList');
         if (eventos.length === 0) {
@@ -162,7 +158,7 @@ async function actualizarARM64() {
             } else if (tipo === 'ADVANCED_TREND') {
                 const flecha = d.TREND === 'UP' ? '↑' : d.TREND === 'DOWN' ? '↓' : '→';
                 document.getElementById('arm64_tend').textContent     = `Tendencia: ${d.TREND || '--'} ${flecha}`;
-                document.getElementById('arm64_tend_det').textContent = `+${d.INCREMENTS || '--'} incrementos, -${d.DECREMENTS || '--'} decrementos, racha max: ${d.MAX_UP_STREAK || '--'}`;
+                document.getElementById('arm64_tend_det').textContent = `+${d.INCREMENTS || '--'} incrementos, -${d.DECREMENTS || '--'} decrementos, racha max: ${d.MAX_UP_STREAK || '--'}, diff acum: ${d.ACCUM_DIFF || '--'}`;
             }
         });
     } catch (e) {}
@@ -210,9 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCharts();
 
     const styleEl = document.createElement('style');
-    styleEl.textContent = `
-        .progress-bar::before { width: var(--pw,0%); background: var(--pc,#2e8b57); }
-    `;
+    styleEl.textContent = `.progress-bar::before { width: var(--pw,0%); background: var(--pc,#2e8b57); }`;
     document.head.appendChild(styleEl);
 
     cicloCompleto();

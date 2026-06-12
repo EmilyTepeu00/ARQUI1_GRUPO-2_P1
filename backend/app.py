@@ -58,9 +58,10 @@ def api_historial():
         h["labels"].append(ts[11:19] if len(ts) >= 19 else ts)
         h["temperatura"].append(d.get("temperatura", {}).get("valor", 0))
         h["humedad"].append(d.get("hum_aire",    {}).get("valor", 0))
-        h["suelo1"].append(d.get("hum_suelo_1", {}).get("valor", 0))
-        h["suelo2"].append(d.get("hum_suelo_2", {}).get("valor", 0))
-        h["luz"].append(d.get("luz", {}).get("valor", 0))
+        h["suelo1"].append(d.get("hum_suelo_1", {}).get("valor_num", 0))
+        h["suelo2"].append(d.get("hum_suelo_2", {}).get("valor_num", 0))
+        luz_val = d.get("luz", {}).get("valor", "NORMAL")
+        h["luz"].append(0 if luz_val == "BAJO" else 1)
         h["gas"].append(d.get("gas", {}).get("valor", 0))
     return jsonify(h)
 

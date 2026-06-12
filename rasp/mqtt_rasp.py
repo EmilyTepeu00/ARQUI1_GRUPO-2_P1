@@ -65,16 +65,13 @@ def publicar_humedad_ambiente(valor):
         "timestamp": datetime.now().isoformat(), "origen": "DHT11"
     })
 
-
-def publicar_humedad_suelo(area, estado):
-    """estado = 'SECO' o 'NORMAL' (sensor digital)"""
+def publicar_humedad_suelo(area, valor, estado):
     topic = cfg.TOPIC_HUMEDAD_SUELO_1 if area == 1 else cfg.TOPIC_HUMEDAD_SUELO_2
     _pub(topic, {
-        "valor": estado, "area": area,
+        "valor": valor, "estado": estado, "area": area,
         "timestamp": datetime.now().isoformat(),
         "origen": f"sensor_suelo_area{area}"
     })
-
 
 def publicar_luz(estado):
     _pub(cfg.TOPIC_LUZ, {
@@ -93,6 +90,12 @@ def publicar_gas(valor, estado):
 def publicar_estado_global(estado, modo):
     _pub(cfg.TOPIC_ESTADO_GLOBAL, {
         "estado": estado, "modo": modo,
+        "timestamp": datetime.now().isoformat()
+    })
+
+def publicar_comando_manual(accion, valor):
+    _pub(cfg.TOPIC_CONTROL_MANUAL, {
+        "accion": accion, "valor": valor,
         "timestamp": datetime.now().isoformat()
     })
 

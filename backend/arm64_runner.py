@@ -5,8 +5,10 @@ from datetime import datetime
 import database as db
 import config
 
-ARM64_DIR     = os.path.join(os.path.dirname(__file__), "..", "ARM64")
+ARM64_DIR      = os.path.join(os.path.dirname(__file__), "..", "ARM64")
 RESULTADOS_DIR = ARM64_DIR
+CSV_BACKEND    = os.path.join(os.path.dirname(__file__), "lecturas.csv")
+CSV_ARM64      = os.path.join(ARM64_DIR, "lecturas.csv")
 
 MODULOS = [
     {
@@ -124,11 +126,14 @@ def parsear_txt(ruta):
     if not os.path.exists(ruta):
         return resultado
     with open(ruta, "r") as f:
-        for linea in f:
-            linea = linea.strip()
-            if "=" in linea:
-                k, v = linea.split("=", 1)
-                resultado[k.strip()] = v.strip()
+        contenido = f.read()
+    secciones = contenido.split("---")
+    seccion = secciones[0]
+    for linea in seccion.strip().splitlines():
+        linea = linea.strip()
+        if "=" in linea:
+            k, v = linea.split("=", 1)
+            resultado[k.strip()] = v.strip()
     return resultado
 
 
@@ -156,14 +161,16 @@ def guardar_en_mongo(resultados):
 def correr_pipeline():
     global _ejecutado
     with _lock:
-        if _ejecutado:
-            return
-        _ejecutado = True
+       _ejecutado = True
 
+    import shutil
     import csv_manager
     if not csv_manager.esta_completo():
         print("[ARM64] CSV aun no completo — esperando 30 lecturas")
         return
+
+    shutil.copy(CSV_BACKEND, CSV_ARM64)
+    print("[ARM64] CSV copiado a ARM64/")
 
     ok = compilar_modulos()
     if ok:

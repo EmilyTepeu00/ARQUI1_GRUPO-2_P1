@@ -40,7 +40,7 @@ PIN_RELE_BOMBA = 17   # Relé 1 → bomba de agua
 PIN_RELE_VENT  = 22   # Relé 2 → ventilador
 PIN_LED_LUZ_1  = 23   # LEDs iluminación área 1
 PIN_LED_LUZ_2  = 24   # LEDs iluminación área 2
-PIN_BUZZER     = 25   # Buzzer activo
+PIN_BUZZER     = 27   # Buzzer activo
 
 # LEDs de estado
 PIN_LED_VERDE    = 5  # Estado NORMAL
@@ -48,10 +48,10 @@ PIN_LED_AMARILLO = 6  # Estado ADVERTENCIA / RIEGO_ACTIVO
 PIN_LED_ROJO     = 13 # Estado EMERGENCIA
 
 # Botones físicos (pull-up interno)
-PIN_BTN_MODO   = 14
-PIN_BTN_RIEGO  = 15
-PIN_BTN_LUCES  = 18
-PIN_BTN_RESET  = 27 
+PIN_BTN_MODO   = 14   # Botón 1 — cambiar AUTO/MANUAL
+PIN_BTN_RIEGO  = 15   # Botón 2 — riego manual
+PIN_BTN_LUCES  = 18   # Botón 3 — luces manual
+PIN_BTN_RESET  = 20   # Botón 4 — silenciar alarma / reset
 
 # LCD I2C
 LCD_ADDRESS    = 0x27 # Dirección I2C (probar 0x3F si no funciona)
@@ -60,10 +60,9 @@ LCD_ROWS       = 2
 
 # Umbrales
 UMBRAL_TEMP_ALTA       = 32.0
-UMBRAL_HUMEDAD_BAJA    = 40    # % suelo (solo referencia, sensor es digital)
 UMBRAL_LUZ_BAJA        = 300   # LDR digital: 0=oscuro, 1=luz
-UMBRAL_GAS_ADVERTENCIA = 400   # Valor ADC del MCP3008 (0-1023)
-UMBRAL_GAS_EMERGENCIA  = 600   # Valor ADC del MCP3008 (0-1023)
+UMBRAL_GAS_EMERGENCIA = 90
+UMBRAL_GAS_ADVERTENCIA = 80
 
 # Duración del riego (segundos)
 DURACION_RIEGO    = 10

@@ -59,9 +59,11 @@ newline_len = . - newline
 .comm buffer_salida, 512, 8
 
 // estos son espacios temporales para convertir numeros a texto
-.comm buf_media, 32, 8
-.comm buf_var,   32, 8
-.comm buf_desv,  32, 8
+.section .bss
+buffer_salida: .skip 512
+buf_media:     .skip 32
+buf_var:       .skip 32
+buf_desv:      .skip 32
 
 // ===========================================================
 // Aca empieza el codigo que se ejecuta

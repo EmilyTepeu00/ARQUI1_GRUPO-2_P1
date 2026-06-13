@@ -55,9 +55,6 @@ label_desv_len = . - label_desv
 newline:        .asciz "\n"
 newline_len = . - newline
 
-// aqui voy armando todo el texto del archivo antes de guardarlo
-.comm buffer_salida, 512, 8
-
 // estos son espacios temporales para convertir numeros a texto
 .section .bss
 buffer_salida: .skip 512

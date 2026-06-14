@@ -99,7 +99,6 @@ def _activar_riego():
         _riego_activo = True
         print(f"[RIEGO] Iniciando por {cfg.DURACION_RIEGO}s")
         actuadores.bomba(True)
-        time.sleep(cfg.DURACION_RIEGO)
         actuadores.apagar_bomba()
         _riego_activo = False
         _tiempo_ultimo_riego = time.time()
@@ -238,7 +237,6 @@ def _loop():
             ciclo()
         except Exception as e:
             print(f"[ERROR] {e}")
-        time.sleep(cfg.INTERVALO_LECTURA)
 
 
 def shutdown(sig, frame):
@@ -267,6 +265,4 @@ if __name__ == "__main__":
     mqtt.iniciar(cb_comando=procesar_comando)
 
     lcd.escribir("Invernadero IoT", "Iniciando...")
-    time.sleep(1)
-
     _loop()

@@ -22,7 +22,6 @@ def inicializar():
         _enviar_byte(0x0C, LCD_CMD)
         _enviar_byte(0x28, LCD_CMD)
         _enviar_byte(0x01, LCD_CMD)
-        time.sleep(0.0005)
         print("[LCD] Inicializada OK")
     except Exception as e:
         print(f"[LCD] Error: {e}")
@@ -41,17 +40,13 @@ def _enviar_byte(bits, modo):
 
 
 def _toggle_enable(bits):
-    time.sleep(0.0005)
     _bus.write_byte(cfg.LCD_ADDRESS, (bits | ENABLE))
-    time.sleep(0.0005)
     _bus.write_byte(cfg.LCD_ADDRESS, (bits & ~ENABLE))
-    time.sleep(0.0005)
 
 
 def limpiar():
     if _bus:
         _enviar_byte(0x01, LCD_CMD)
-        time.sleep(0.002)
 
 
 def escribir(linea1, linea2=""):

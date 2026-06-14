@@ -228,6 +228,5 @@ def iniciar_cuando_csv_completo():
             if csv_manager.esta_completo():
                 correr_pipeline()
                 break
-            time.sleep(5)
     t = threading.Thread(target=_monitor, daemon=True)
     t.start()

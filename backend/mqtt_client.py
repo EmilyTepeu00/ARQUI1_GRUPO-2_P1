@@ -177,11 +177,7 @@ def iniciar():
     client.connect(config.MQTT_BROKER, config.MQTT_PORT, keepalive=60)
     client.loop_start()
 
-    timeout = time.time() + 8
-    while not _conectado and time.time() < timeout:
-        time.sleep(0.1)
-
-    print("[MQTT] Listo" if _conectado else "[MQTT] Sin conexion al broker")
+    print("[MQTT] Cliente MQTT iniciado")
 
 
 def detener():

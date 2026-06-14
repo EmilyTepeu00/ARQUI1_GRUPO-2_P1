@@ -23,7 +23,6 @@ def inicializar_arduino():
     global _arduino
     try:
         _arduino = serial.Serial('/dev/ttyACM0', 9600, timeout=2)
-        _time.sleep(2)
         print("[ARDUINO] Conectado OK")
     except Exception as e:
         print(f"[ARDUINO] Error: {e}")

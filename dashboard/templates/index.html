@@ -146,7 +146,19 @@
                 </div>
                 <div style="margin-top:10px">
                     <div class="csv-status" id="csvStatus">CSV: 0/30 lecturas</div>
-                    <button class="btn" onclick="ejecutarARM64()" style="margin-top:8px;width:100%">⚙ Ejecutar Módulos ARM64</button>
+                    <div style="margin-top:10px;">
+                        <label for="arm64Variable" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Variable a analizar:</label>
+                        <select id="arm64Variable" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #ccc;font-size:0.9rem;margin-bottom:8px;">
+                            <option value="TEMP">Temperatura (TEMP)</option>
+                            <option value="HUM_AIRE">Humedad Ambiente (HUM_AIRE)</option>
+                            <option value="HUM_SUELO_1">Humedad Suelo Area 1 (HUM_SUELO_1)</option>
+                            <option value="HUM_SUELO_2">Humedad Suelo Area 2 (HUM_SUELO_2)</option>
+                            <option value="LUZ">Nivel de Luz (LUZ)</option>
+                            <option value="GAS">Nivel de Gas (GAS)</option>
+                        </select>
+                    </div>
+                    <div id="arm64VariableLabel" style="font-size:0.8rem;color:#555;margin-bottom:6px;min-height:16px;"></div>
+                    <button class="btn" onclick="ejecutarARM64()" style="margin-top:4px;width:100%">Ejecutar Modulos ARM64</button>
                 </div>
             </div>
         </div>

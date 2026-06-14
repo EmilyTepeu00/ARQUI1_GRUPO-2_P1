@@ -131,11 +131,26 @@ def api_comando():
     })
 
 
+@app.route("/api/arm64/variables")
+def api_arm64_variables():
+    return jsonify(list(arm64_runner.VARIABLES.keys()))
+
+
 @app.route("/api/arm64/ejecutar", methods=["POST"])
 def api_arm64_ejecutar():
     import threading
-    threading.Thread(target=arm64_runner.correr_pipeline, daemon=True).start()
-    return jsonify({"status": "iniciado", "timestamp": datetime.now().isoformat()})
+    datos    = request.get_json() or {}
+    variable = datos.get("variable", "TEMP").upper()
+    threading.Thread(
+        target=arm64_runner.correr_pipeline,
+        args=(variable,),
+        daemon=True
+    ).start()
+    return jsonify({
+        "status":    "iniciado",
+        "variable":  variable,
+        "timestamp": datetime.now().isoformat()
+    })
 
 
 def iniciar_servicios():

@@ -135,8 +135,13 @@ def _guardar_lectura_completa(l):
         })
 
     import csv_manager
-    riego1 = 1 if estado["riego"] == "RIEGO_AREA_1" else 0
-    riego2 = 1 if estado["riego"] == "RIEGO_AREA_2" else 0
+    # Determinar riego por area segun el estado del suelo real
+    # Si el suelo esta seco y el riego esta activo, marcamos el area correspondiente
+    riego_activo = estado["riego"] not in ("RIEGO_OFF", "BLOQUEADO_POR_SATURACION")
+    suelo1_seco  = (l["hum_suelo1"] == "SECO")
+    suelo2_seco  = (l["hum_suelo2"] == "SECO")
+    riego1 = 1 if (riego_activo and suelo1_seco) else 0
+    riego2 = 1 if (riego_activo and suelo2_seco) else 0
     csv_manager.agregar_fila(
         l["temperatura"], l["hum_aire"], l["hum_suelo1"],
         l["hum_suelo2"], l["luz"], l["gas"], riego1, riego2

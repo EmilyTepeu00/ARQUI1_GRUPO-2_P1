@@ -1,4 +1,3 @@
-import csv
 import os
 import threading
 import config
@@ -11,8 +10,8 @@ _completo   = False
 def inicializar():
     global _id_counter, _completo
     if not os.path.exists(config.CSV_FILE):
-        with open(config.CSV_FILE, "w", newline="") as f:
-            csv.writer(f).writerow(config.CSV_HEADERS)
+        with open(config.CSV_FILE, "w") as f:
+            f.write(",".join(config.CSV_HEADERS) + "\n")
         _id_counter = 1
         _completo   = False
         print(f"[CSV] Creado '{config.CSV_FILE}'")
@@ -23,6 +22,7 @@ def inicializar():
         _id_counter = len(filas) + 1
         _completo   = _id_counter > config.CSV_MAX_ROWS
         print(f"[CSV] Existente — {len(filas)} registros, continuando desde ID {_id_counter}")
+
 
 def agregar_fila(temp, hum_aire, hum_suelo1, hum_suelo2, luz, gas, riego1, riego2):
     global _id_counter, _completo
@@ -35,20 +35,33 @@ def agregar_fila(temp, hum_aire, hum_suelo1, hum_suelo2, luz, gas, riego1, riego
         suelo2_num = 0 if hum_suelo2 == "SECO" else 1
         luz_num    = 0 if luz == "BAJO" else 1
 
-        fila = [_id_counter, round(float(temp),1), int(hum_aire),
-                suelo1_num, suelo2_num, luz_num, int(gas),
-                int(riego1), int(riego2)]
+        # temp * 10 para evitar punto decimal (24.6 -> 246)
+        # ARM64 ascii_a_int no maneja decimales
+        valores = [
+            str(_id_counter),
+            str(int(round(float(temp) * 10))),
+            str(int(hum_aire)),
+            str(suelo1_num),
+            str(suelo2_num),
+            str(luz_num),
+            str(int(gas)),
+            str(int(riego1)),
+            str(int(riego2)),
+        ]
 
-        with open(config.CSV_FILE, "a", newline="") as f:
-            csv.writer(f).writerow(fila)
+        with open(config.CSV_FILE, "a") as f:
+            f.write(",".join(valores) + "\n")
+
         print(f"[CSV] Fila {_id_counter}/{config.CSV_MAX_ROWS}")
         _id_counter += 1
+
         if _id_counter > config.CSV_MAX_ROWS:
             with open(config.CSV_FILE, "a") as f:
                 f.write("$\n")
             _completo = True
             print("[CSV] COMPLETO — 30 registros listos para ARM64")
         return True
+
 
 def esta_completo():
     return _completo
@@ -64,9 +77,16 @@ def leer_csv():
     try:
         rows = []
         with open(config.CSV_FILE, "r") as f:
-            for row in csv.DictReader(f):
-                if "$" not in str(row):
-                    rows.append(row)
+            lineas = f.readlines()
+        if not lineas:
+            return []
+        headers = lineas[0].strip().split(",")
+        for linea in lineas[1:]:
+            linea = linea.strip()
+            if not linea or linea == "$":
+                continue
+            valores = linea.split(",")
+            rows.append(dict(zip(headers, valores)))
         return rows
     except Exception as e:
         print(f"[CSV] Error al leer: {e}")

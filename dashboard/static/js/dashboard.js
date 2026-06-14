@@ -133,35 +133,40 @@ async function actualizarARM64() {
     try {
         const csv = await fetch('/api/csv').then(r => r.json());
         document.getElementById('csvStatus').textContent =
-            `CSV: ${csv.filas}/30 lecturas ${csv.completo ? '✅ COMPLETO' : '⏳'}`;
+            `CSV: ${csv.filas}/30 lecturas ${csv.completo ? 'COMPLETO' : 'pendiente'}`;
 
         const datos = await fetch('/api/arm64').then(r => r.json());
         if (!datos || datos.length === 0) return;
+
+        // Mostrar la variable que se analizo (viene en el primer resultado)
+        const varAnalizada = datos[0] && datos[0].variable ? datos[0].variable : '';
+        const labelVar = document.getElementById('arm64VariableLabel');
+        if (labelVar && varAnalizada) labelVar.textContent = `Variable analizada: ${varAnalizada}`;
 
         datos.forEach(d => {
             const tipo = d.tipo || d.MODULE;
             if (tipo === 'WEIGHTED_MEAN') {
                 document.getElementById('arm64_media').textContent     = `Media Ponderada: ${d.WEIGHTED_MEAN || '--'}`;
-                document.getElementById('arm64_media_det').textContent = `Σ(X·W)/ΣW | SumX=${d.SUM_X || '--'} | SumW=${d.WEIGHT_SUM || '--'}`;
+                document.getElementById('arm64_media_det').textContent = `Sum(X*W)/Sum(W) | SumX=${d.SUM_X || '--'} | SumW=${d.WEIGHT_SUM || '--'}`;
             } else if (tipo === 'VARIANCE') {
                 document.getElementById('arm64_var').textContent     = `Varianza: ${d.VARIANCE || '--'} | StdDev: ${d.STD_DEV || '--'}`;
                 document.getElementById('arm64_var_det').textContent = `Media: ${d.MEAN || '--'} | N=30`;
             } else if (tipo === 'ANOMALY_DETECTION') {
-                document.getElementById('arm64_anom').textContent = `${d.ANOMALIES || '--'} anomalías detectadas`;
+                document.getElementById('arm64_anom').textContent = `${d.ANOMALIES || '--'} anomalias detectadas`;
                 const riesgo = d.SYSTEM_RISK || '--';
                 const rEl = document.getElementById('arm64_riesgo');
                 rEl.textContent = `Riesgo: ${riesgo}`;
                 rEl.className = `arm64-risk ${riesgo === 'HIGH' ? 'risk-alto' : riesgo === 'MEDIUM' ? 'risk-medio' : 'risk-bajo'}`;
             } else if (tipo === 'PREDICTION') {
-                document.getElementById('arm64_pred').textContent     = `Próximo valor: ${d.NEXT_VALUE || '--'}`;
+                document.getElementById('arm64_pred').textContent     = `Proximo valor: ${d.NEXT_VALUE || '--'}`;
                 document.getElementById('arm64_pred_det').textContent = `Inicial=${d.INITIAL_VALUE || '--'} Final=${d.FINAL_VALUE || '--'} Cambio/ciclo=${d.AVG_CHANGE || '--'}`;
             } else if (tipo === 'ADVANCED_TREND') {
-                const flecha = d.TREND === 'UP' ? '↑' : d.TREND === 'DOWN' ? '↓' : '→';
+                const flecha = d.TREND === 'UP' ? '(subida)' : d.TREND === 'DOWN' ? '(bajada)' : '(estable)';
                 document.getElementById('arm64_tend').textContent     = `Tendencia: ${d.TREND || '--'} ${flecha}`;
                 document.getElementById('arm64_tend_det').textContent = `+${d.INCREMENTS || '--'} incrementos, -${d.DECREMENTS || '--'} decrementos, racha max: ${d.MAX_UP_STREAK || '--'}, diff acum: ${d.ACCUM_DIFF || '--'}`;
             }
         });
-    } catch (e) {}
+    } catch (e) { console.error('Error actualizarARM64:', e); }
 }
 
 async function cmd(accion, valor) {
@@ -184,12 +189,19 @@ async function cmd(accion, valor) {
 
 async function ejecutarARM64() {
     try {
-        await fetch('/api/arm64/ejecutar', {method: 'POST'});
+        const select   = document.getElementById('arm64Variable');
+        const variable = select ? select.value : 'TEMP';
+        const res = await fetch('/api/arm64/ejecutar', {
+            method:  'POST',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify({ variable })
+        });
+        const data = await res.json();
         const fb = document.getElementById('feedback');
-        fb.textContent = '⚙ Módulos ARM64 iniciados...';
+        fb.textContent = `Modulos ARM64 iniciados para variable: ${data.variable}`;
         fb.style.display = 'block';
         setTimeout(() => { fb.style.display = 'none'; actualizarARM64(); }, 3000);
-    } catch (e) {}
+    } catch (e) { console.error('Error ejecutarARM64:', e); }
 }
 
 let graficasActualizadas = 0;

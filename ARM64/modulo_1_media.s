@@ -46,12 +46,12 @@ label_mean_len = . - label_mean
 .section .bss
 
 // aqui armo todo el texto antes de escribirlo al archivo
-.comm buffer_salida, 512, 8
+buffer_salida:  .skip 512
 
 // buffers para convertir cada numero a texto
-.comm buf_sumx,  32, 8
-.comm buf_wsum,  32, 8
-.comm buf_media, 32, 8
+buf_sumx:   .skip 32
+buf_wsum:   .skip 32
+buf_media:  .skip 32
 
 .section .text
 .global _start

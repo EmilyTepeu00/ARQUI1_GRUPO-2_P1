@@ -31,10 +31,26 @@
    ====================================================================================
 */
 
+.extern leer_datos
+.extern datos
+.extern int_a_ascii
+
+// syscalls que necesito para abrir, escribir y cerrar el archivo
+.equ SYS_OPENAT,  56
+.equ SYS_CLOSE,   57
+.equ SYS_WRITE,   64
+.equ SYS_EXIT,    93
+.equ AT_FDCWD,   -100
+.equ O_WRONLY,    1
+.equ O_CREAT,     64
+.equ O_TRUNC,     512
+.equ PERM_644,    0644
+
 .section .data
+
 nombre_salida:  .asciz "resultado_prediccion.txt"
 
-// Textos fijos en formato .asciz 
+// textos fijos que van en el archivo de salida
 lbl_header: .asciz "MODULE=PREDICTION\nINITIAL_VALUE="
 lbl_final:  .asciz "\nFINAL_VALUE="
 lbl_diff:   .asciz "\nTOTAL_DIFF="
@@ -43,136 +59,156 @@ lbl_next:   .asciz "\nNEXT_VALUE="
 lbl_nl:     .asciz "\n"
 
 .section .bss
-buffer_salida:  .skip 512    // Buffer donde se armara el archivo completo
-buf_conv:       .skip 32     // Buffer temporal para conversiones numéricas
+
+// aqui armo todo el texto antes de escribirlo al archivo
+buffer_salida:  .skip 512
+buf_conv:       .skip 32
 
 .section .text
 .global _start
 
-// Funciones y arreglos importados desde utils.s
-.extern leer_datos
-.extern datos
-.extern int_a_ascii
-.extern escribir_archivo
-
 _start:
-    // 1. Leer los datos de la columna LUZ (índice 5 de base 0)
+    // leo la columna 5 (LUZ) del CSV, utils llena datos[] con los 30 valores
     mov x0, #5
-    bl  leer_datos          // El arreglo global 'datos' se llena con 30 registros
+    bl  leer_datos
 
-    // 2. Extraer el valor inicial (fila 1) y valor final (fila 30)
-    // PASAMOS A REGISTROS SEGUROS (x19, x22-x25) QUE NO SE CORRUMPEN CON 'bl'
-    adr x9, datos           // Cargar la dirección base del arreglo 'datos'
-    ldr x19, [x9, #0]       // x19 = Valor Inicial (datos[0])
-    ldr x22, [x9, #232]   // x22 = Valor Final (datos[29] -> 29 * 8 bytes = 232)
+    // guardo el valor inicial (datos[0]) y el valor final (datos[29])
+    // uso registros x19 en adelante porque no se pierden con bl
+    adr x9,  datos
+    ldr x19, [x9, #0]       // x19 = valor inicial = datos[0]
+    ldr x22, [x9, #232]     // x22 = valor final   = datos[29] -> 29*8 = 232
 
-    // 3. Realizar los cálculos matemáticos
-    sub x23, x22, x19       // x23 = Diferencia total (Final - Inicial)
-    mov x4, #29             // x4 = 29 intervalos de cambio (30 datos - 1)
-    sdiv x24, x23, x4       // x24 = Promedio de cambio (Diferencia / 29)
-    add  x25, x22, x24      // x25 = Predicción (Final + Promedio de cambio)
+    // hago los calculos
+    sub x23, x22, x19       // x23 = diferencia total = final - inicial
+    mov x4,  #29            // 29 intervalos entre 30 datos
+    sdiv x24, x23, x4       // x24 = promedio de cambio = diferencia / 29
+    add  x25, x22, x24      // x25 = prediccion = final + promedio de cambio
 
-    // 4. Construcción del Buffer de salida en memoria
-    adr x20, buffer_salida  // x20 será el puntero de escritura en el buffer
+    // empiezo a armar el texto en buffer_salida
+    // x20 es el puntero de escritura, va avanzando con cada cosa que agrego
+    adr x20, buffer_salida
 
-    // --- Escribir Encabezado y Valor Inicial ---
+    // escribo MODULE=PREDICTION y INITIAL_VALUE=valor
     adr x0, lbl_header
     bl  copiar_a_buffer
-    mov x0, x19             
+    mov x0, x19
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // --- Escribir Valor Final ---
+    // escribo FINAL_VALUE=valor
     adr x0, lbl_final
     bl  copiar_a_buffer
-    mov x0, x22             
+    mov x0, x22
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // --- Escribir Diferencia Total ---
+    // escribo TOTAL_DIFF=valor
     adr x0, lbl_diff
     bl  copiar_a_buffer
-    mov x0, x23            
+    mov x0, x23
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // --- Escribir Promedio de Cambio ---
+    // escribo AVG_CHANGE=valor
     adr x0, lbl_avg
     bl  copiar_a_buffer
-    mov x0, x24            
+    mov x0, x24
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // --- Escribir Predicción (Siguiente Valor) ---
+    // escribo NEXT_VALUE=valor
     adr x0, lbl_next
     bl  copiar_a_buffer
-    mov x0, x25             
+    mov x0, x25
     adr x1, buf_conv
     bl  formatear_numero
     adr x0, buf_conv
     bl  copiar_a_buffer
 
-    // --- Escribir salto de línea final ---
+    // salto de linea al final
     adr x0, lbl_nl
     bl  copiar_a_buffer
 
-    // 5. Guardar el buffer completo en el archivo físico
-    adr x0, nombre_salida
+    // calculo cuantos bytes escribi en el buffer
+    // x20 ya avanzo hasta el final, x1 apunta al inicio
     adr x1, buffer_salida
-    sub x2, x20, x1         
-    bl  escribir_archivo
+    sub x26, x20, x1        // x26 = cantidad de bytes del buffer
 
-exit_program:
-    // Terminar la ejecución del programa de forma limpia
+    // creo o sobreescribo resultado_prediccion.txt
+    mov x8, #56
+    mov x0, #-100
+    adr x1, nombre_salida
+    mov x2, #577            // crear si no existe, borrar contenido anterior
+    mov x3, #0644
+    svc #0
+    mov x10, x0             // guardo el descriptor del archivo
+
+    // escribo el buffer al archivo
+    mov x8, #64
+    mov x0, x10
+    adr x1, buffer_salida
+    mov x2, x26
+    svc #0
+
+    // cierro el archivo
+    mov x8, #57
+    mov x0, x10
+    svc #0
+
+    // tambien muestro el resultado en la terminal
+    mov x8, #64
+    mov x0, #1              // 1 = stdout = pantalla
+    adr x1, buffer_salida
+    mov x2, x26
+    svc #0
+
+    // fin del programa
+    mov x8, #93
     mov x0, #0
-    mov x8, #93             // Syscall SYS_EXIT
     svc #0
 
 
 // ============================================================
-// FUNCIONES AUXILIARES INTERNAS
+// copiar_a_buffer
+// Copia una cadena terminada en \0 desde x0 hacia x20
+// x20 avanza automaticamente con cada caracter que copia
 // ============================================================
-
-// --- Función: copiar_a_buffer ---
-// Copia una cadena terminada en \0 (x0) hacia el buffer de salida (x20)
 copiar_a_buffer:
-    ldrb w21, [x0], #1
-    cbz  w21, fin_copiar
-    strb w21, [x20], #1
+    ldrb w21, [x0], #1      // leo un byte y avanzo x0
+    cbz  w21, fin_copiar    // si es \0 termino
+    strb w21, [x20], #1     // guardo el byte y avanzo x20
     b    copiar_a_buffer
 fin_copiar:
     ret
 
-// --- Función: formatear_numero ---
-// Revisa si el número es negativo. Si lo es, añade el '-' al buffer destino 
-// y luego llama al conversor normal de utils.s
+
+// ============================================================
+// formatear_numero
+// Si el numero en x0 es negativo pone el signo '-' primero
+// y luego llama a int_a_ascii de utils para convertir el resto
+// x1 = buffer destino para el texto
+// ============================================================
 formatear_numero:
     stp  x29, x30, [sp, #-16]!
     mov  x29, sp
 
     cmp  x0, #0
-    bge  conv_positivo      // Si es mayor o igual a 0, saltar
+    bge  conv_positivo      // si es positivo o cero salto directo
 
-    // Si es negativo: colocar '-' en el buffer de conversión
-    mov  w9, #45            // Código ASCII para '-'
-    strb w9, [x1], #1       // Guardar el '-' y avanzar el puntero del buffer
-    neg  x0, x0             // Volver el número positivo para int_a_ascii
+    // si es negativo pongo el '-' antes del numero
+    mov  w9, #45            // 45 es el codigo ASCII del '-'
+    strb w9, [x1], #1       // guardo el '-' y avanzo el puntero
+    neg  x0, x0             // convierto a positivo para int_a_ascii
 
 conv_positivo:
-    bl   int_a_ascii        // Llamar a la función del archivo utils.s
+    bl   int_a_ascii        // int_a_ascii convierte x0 al texto en x1
     ldp  x29, x30, [sp], #16
     ret
-
-/*  Ejecutar para pruebas:
-    make modulo_4_prediccion
-    qemu-aarch64 ./modulo_4_prediccion
-    cat resultado_prediccion.txt
-*/
